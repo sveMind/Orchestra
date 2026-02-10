@@ -15,6 +15,7 @@ jobs:
       (github.event.action == 'labeled' && (github.event.label.name == 'autobot' || github.event.label.name == 'autobot-task')) ||
       (github.event.action == 'opened' && (contains(github.event.issue.labels.*.name, 'autobot') || contains(github.event.issue.labels.*.name, 'autobot-task')))
     runs-on: ubuntu-latest
+    environment: OPENAI_API_KEY
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
