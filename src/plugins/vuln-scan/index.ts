@@ -1,8 +1,9 @@
 import { AutoBotPlugin } from '../../types';
 import fs from 'fs';
 import { consultAgent, AgentRole } from '../../services/agentService';
-import { createIssue } from '../../services/githubService';
+import { createIssue, createPullRequest } from '../../services/githubService';
 import { extractCodeBlock } from '../../utils/codeExtractor';
+import { createBranch, commitChanges, pushChanges, checkoutBranch } from '../../services/gitService';
 
 export const scanForVulnerabilities = async (filePath: string, applyFix: boolean = false): Promise<void> => {
   console.log(`Scanning for vulnerabilities in: ${filePath}`);
@@ -84,6 +85,36 @@ ${fixedCode || fixSuggestion}
     
     if (issueUrl) {
         console.log(`Issue created successfully: ${issueUrl}`);
+        
+        // Step 5: Create Branch and PR
+        if (fixedCode) {
+            const timestamp = new Date().getTime();
+            const branchName = `autobot/fix-security-${timestamp}`;
+            const fileName = filePath.split('/').pop();
+            
+            try {
+                console.log(`\nInitiating Git workflow for fix...`);
+                await createBranch(branchName);
+                await commitChanges(`fix(security): resolve vulnerabilities in ${fileName}`, [filePath]);
+                await pushChanges(branchName);
+                
+                const prUrl = await createPullRequest(
+                    `Security Fix: ${fileName}`,
+                    branchName,
+                    'main', // Assuming main is the base branch
+                    `Fixes ${issueUrl}\n\nAutomated security fix applied by AutoBot.`
+                );
+                
+                if (prUrl) {
+                    console.log(`Pull Request created successfully: ${prUrl}`);
+                }
+                
+                // Switch back to main? Or stay? In CI it doesn't matter much.
+                // await checkoutBranch('main'); 
+            } catch (gitError) {
+                console.error('Git workflow failed (might be running locally without upstream):', gitError);
+            }
+        }
     } else {
         console.log('Failed to create GitHub issue (check API configuration).');
     }

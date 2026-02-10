@@ -61,3 +61,44 @@ export const getDiff = async (filePath: string): Promise<string> => {
         return '';
     }
 }
+
+export const createBranch = async (branchName: string): Promise<void> => {
+    try {
+        await git.checkoutLocalBranch(branchName);
+        console.log(`Created and checked out branch: ${branchName}`);
+    } catch (error) {
+        console.error(`Error creating branch ${branchName}:`, error);
+        throw error;
+    }
+};
+
+export const checkoutBranch = async (branchName: string): Promise<void> => {
+    try {
+        await git.checkout(branchName);
+        console.log(`Checked out branch: ${branchName}`);
+    } catch (error) {
+        console.error(`Error checking out branch ${branchName}:`, error);
+        throw error;
+    }
+};
+
+export const commitChanges = async (message: string, files: string[] = ['.']): Promise<void> => {
+    try {
+        await git.add(files);
+        await git.commit(message);
+        console.log(`Committed changes: ${message}`);
+    } catch (error) {
+        console.error(`Error committing changes:`, error);
+        throw error;
+    }
+};
+
+export const pushChanges = async (branchName: string): Promise<void> => {
+    try {
+        await git.push('origin', branchName, { '--set-upstream': null });
+        console.log(`Pushed changes to ${branchName}`);
+    } catch (error) {
+        console.error(`Error pushing changes to ${branchName}:`, error);
+        throw error;
+    }
+};

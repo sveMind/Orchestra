@@ -6,6 +6,11 @@ on:
       - 'examples/mock-website/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
   improve-example:
     runs-on: ubuntu-latest
