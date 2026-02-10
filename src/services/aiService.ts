@@ -4,7 +4,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const apiKey = process.env.OPENAI_API_KEY;
-const baseURL = process.env.AI_BASE_URL || 'https://api.openai.com/v1';
+// Prioritize OPENAI_BASE_URL if set (common convention), fallback to AI_BASE_URL, then default to OpenAI
+const baseURL = process.env.OPENAI_BASE_URL || process.env.AI_BASE_URL || 'https://api.openai.com/v1';
 const model = process.env.AI_MODEL || 'gpt-3.5-turbo';
 
 if (!apiKey) {
