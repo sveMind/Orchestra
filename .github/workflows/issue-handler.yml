@@ -39,6 +39,10 @@ jobs:
           GITHUB_OWNER: ${{ github.repository_owner }}
           GITHUB_REPO: ${{ github.event.repository.name }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Map the secrets the user has configured
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+          # Fallback if user set OPENAI_BASE_URL instead
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
         run: |
           # Run the CLI command via ts-node
