@@ -2,7 +2,7 @@ name: AutoBot Issue Handler
 
 on:
   issues:
-    types: [opened]
+    types: [opened, labeled]
 
 permissions:
   contents: write
@@ -11,6 +11,9 @@ permissions:
 
 jobs:
   agile-workflow:
+    if: |
+      (github.event.action == 'labeled' && (github.event.label.name == 'autobot' || github.event.label.name == 'autobot-task')) ||
+      (github.event.action == 'opened' && (contains(github.event.issue.labels.*.name, 'autobot') || contains(github.event.issue.labels.*.name, 'autobot-task')))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
