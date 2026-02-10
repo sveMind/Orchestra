@@ -65,3 +65,23 @@ export const createPullRequest = async (title: string, head: string, base: strin
         return null;
     }
 };
+
+export const addComment = async (issueNumber: number, body: string): Promise<string | null> => {
+    if (!githubToken || !owner || !repo) {
+        console.log(`[MOCK GITHUB] Comment added to #${issueNumber}: ${body.substring(0, 50)}...`);
+        return 'https://github.com/mock/repo/issues/123#comment-456';
+    }
+
+    try {
+        const response = await octokit.issues.createComment({
+            owner,
+            repo,
+            issue_number: issueNumber,
+            body,
+        });
+        return response.data.html_url;
+    } catch (error) {
+        console.error('Error adding comment:', error);
+        return null;
+    }
+};
