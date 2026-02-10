@@ -2,6 +2,8 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import { setWorkingDirectory, cloneRepo } from './services/gitService';
 import autoPilotPlugin from './plugins/auto-pilot';
+import { runDevCycle } from './plugins/dev-cycle';
+import { runAgileWorkflow } from './plugins/agile-workflow';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -59,6 +61,31 @@ app.post('/webhook', async (req, res) => {
             console.error('Error processing webhook:', error);
             res.status(500).send('Error executing Auto-Pilot.');
         }
+    } else if (event === 'issues' && req.body.action === 'opened') {
+        const issue = req.body.issue;
+        console.log(`New Issue Opened: #${issue.number} - ${issue.title}`);
+        
+        // Basic heuristic: Create a file based on title
+        const safeTitle = issue.title.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const targetFile = path.join(process.cwd(), 'src', 'features', `${safeTitle}.ts`);
+        
+        // Ensure dir exists
+        const dir = path.dirname(targetFile);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        
+        console.log(`Targeting file: ${targetFile}`);
+        
+        // Run Agile Workflow
+        // Note: In a real production environment, this should be offloaded to a job queue.
+        try {
+            // We'll use the new Agile Workflow instead of just the Dev Cycle
+            await runAgileWorkflow(issue.number, issue.title, issue.body || '');
+            res.status(200).send(`Agile Workflow initiated for issue #${issue.number}`);
+        } catch (error) {
+            console.error('Error running agile workflow:', error);
+            res.status(500).send('Error running agile workflow');
+        }
+
     } else {
         res.status(200).send('Event ignored.');
     }
