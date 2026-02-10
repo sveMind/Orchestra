@@ -1,0 +1,42 @@
+{
+  "name": "autobot",
+  "version": "1.0.0",
+  "description": "AutoBot is a tool for automating pipeline tasks, including:",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc",
+    "start": "ts-node src/index.ts",
+    "dev": "ts-node src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sveMind/AutoBot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/sveMind/AutoBot/issues"
+  },
+  "homepage": "https://github.com/sveMind/AutoBot#readme",
+  "dependencies": {
+    "@octokit/rest": "^22.0.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.2.2",
+    "body-parser": "^2.2.2",
+    "commander": "^14.0.3",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "openai": "^6.19.0",
+    "simple-git": "^3.30.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6"
+  }
+}

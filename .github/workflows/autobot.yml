@@ -1,0 +1,36 @@
+name: AutoBot Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  autobot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Important for git diff analysis
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install AutoBot
+        run: |
+          npm install -g autobot-pipeline # Assuming published, or install from source
+          # For local source usage in this repo:
+          # npm install
+          # npm run build
+
+      - name: Run AutoBot Auto-Pilot
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: autobot auto

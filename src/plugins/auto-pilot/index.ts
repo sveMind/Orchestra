@@ -1,0 +1,115 @@
+import { AutoBotPlugin } from '../../types';
+import { getChangedFiles, getDiff } from '../../services/gitService';
+import { consultAgent, AgentRole } from '../../services/agentService';
+import { generateTests } from '../test-gen';
+import { scanForVulnerabilities } from '../vuln-scan';
+import { generateDocumentation } from '../doc-gen';
+import { manageProject } from '../project-manager';
+import fs from 'fs';
+import path from 'path';
+
+const runAutoPilot = async (): Promise<void> => {
+  console.log('🚀 Engaging AI-Driven Auto-Pilot...');
+  console.log('Analyzing workspace changes to determine optimal pipeline steps...');
+
+  const changedFiles = await getChangedFiles();
+
+  if (changedFiles.length === 0) {
+    console.log('No changes detected. Auto-Pilot standing by.');
+    return;
+  }
+
+  console.log(`Detected ${changedFiles.length} changed file(s). Processing in parallel...`);
+
+  const filePromises = changedFiles.map(async (file) => {
+    if (!fs.existsSync(file)) {
+        console.log(`Skipping deleted or missing file: ${file}`);
+        return;
+    }
+
+    const fileName = path.basename(file);
+    console.log(`\n--- Analyzing: ${fileName} ---`);
+
+    // Get context for the AI (Diff or Content)
+    let context = await getDiff(file);
+    if (!context || context.trim() === '') {
+        // Fallback for new files or when diff is empty
+        context = fs.readFileSync(file, 'utf-8');
+    }
+
+    // Consult the Architect/DevOps Agent
+    const planRaw = await consultAgent(
+        AgentRole.ARCHITECT,
+        `Analyze the changes in the following file and determine the necessary pipeline steps.
+        
+        Available Tools:
+        - "test-gen": Use if logic, functions, or classes were added/modified. (Not for docs or pure config).
+        - "vuln-scan": Use if sensitive data, input handling, auth, or dependencies were touched.
+        - "doc-gen": Use if public APIs, signatures, or documentation files (.md) were changed.
+        - "project-manager": Use if the file represents a new feature request, requirements document, or project brief.
+        
+        File: ${file}
+        
+        Changes/Content:
+        \`\`\`
+        ${context.substring(0, 5000)}
+        \`\`\`
+        
+        Return a JSON array of strings indicating the tools to run. E.g., ["test-gen", "doc-gen"]. 
+        Return [] if no action is needed.`,
+        `File Analysis: ${file}`
+    );
+
+    let plan: string[] = [];
+    try {
+        const jsonMatch = planRaw.match(/\[.*\]/s);
+        plan = JSON.parse(jsonMatch ? jsonMatch[0] : '[]');
+    } catch (e) {
+        console.warn(`[${fileName}] Failed to parse AI plan, defaulting to safety checks based on extension.`);
+        // Fallback to extension based logic if AI fails
+        const ext = path.extname(file);
+        if (['.ts', '.js'].includes(ext)) plan = ['test-gen', 'vuln-scan'];
+    }
+
+    console.log(`\n[Auto-Pilot Plan] Decision for ${fileName}: ${JSON.stringify(plan)}`);
+
+    // Execute the plan in PARALLEL
+    const tasks: Promise<void>[] = [];
+
+    if (plan.includes('vuln-scan')) {
+        tasks.push(scanForVulnerabilities(file));
+    }
+    if (plan.includes('test-gen')) {
+        // Prevent infinite loop of generating tests for test files
+        if (!file.includes('.test.') && !file.includes('.spec.')) {
+             tasks.push(generateTests(file));
+        } else {
+            console.log(`[${fileName}] Skipping test generation for test file.`);
+        }
+    }
+    if (plan.includes('doc-gen')) {
+        tasks.push(generateDocumentation(file));
+    }
+    if (plan.includes('project-manager')) {
+        tasks.push(manageProject(file));
+    }
+
+    await Promise.all(tasks);
+    console.log(`\n✅ Finished processing: ${fileName}`);
+  });
+
+  await Promise.all(filePromises);
+
+  console.log('\n🏁 Auto-Pilot mission complete.');
+};
+
+const plugin: AutoBotPlugin = {
+  name: 'Auto-Pilot',
+  description: 'Automatically analyze changes and run appropriate tools (Tests, Security, Docs)',
+  command: 'auto',
+  action: async () => {
+    await runAutoPilot();
+  }
+};
+
+export default plugin;

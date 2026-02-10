@@ -1,0 +1,12 @@
+name: AutoBot Pipeline
+description: 'Automated pipeline for unit tests, release notes, and security scanning.'
+inputs:
+  openai_api_key:
+    description: 'OpenAI API Key'
+    required: true
+  github_token:
+    description: 'GitHub Token'
+    required: true
+runs:
+  using: 'node16'
+  main: 'dist/index.js'

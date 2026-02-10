@@ -1,0 +1,119 @@
+import { AutoBotPlugin } from '../../types';
+import fs from 'fs';
+import path from 'path';
+import { consultAgent, AgentRole } from '../../services/agentService';
+import { extractCodeBlock } from '../../utils/codeExtractor';
+
+const MAX_ITERATIONS = 3;
+
+export const runDevCycle = async (task: string, filePath: string): Promise<void> => {
+    console.log(`\n🔄 Initiating Dev-QA Orchestration Cycle...`);
+    console.log(`Target File: ${filePath}`);
+    console.log(`Task: ${task}\n`);
+
+    let currentCode = '';
+    
+    // Check if file exists to load initial context
+    if (fs.existsSync(filePath)) {
+        currentCode = fs.readFileSync(filePath, 'utf-8');
+    }
+
+    let iteration = 1;
+    let qaFeedback = '';
+    let isApproved = false;
+
+    while (iteration <= MAX_ITERATIONS && !isApproved) {
+        console.log(`\n--- Iteration ${iteration}/${MAX_ITERATIONS} ---`);
+
+        // Step 1: Software Engineer (Developer)
+        console.log(`👨‍💻 Developer is working...`);
+        const devPrompt = iteration === 1 
+            ? `Task: ${task}\n\nExisting Code:\n${currentCode || '(New File)'}\n\nImplement the requested feature/fix. Return the FULL file content.`
+            : `Task: ${task}\n\nCurrent Code:\n${currentCode}\n\nQA Feedback:\n${qaFeedback}\n\nFix the issues identified by QA. Return the FULL file content.`;
+
+        const devResponse = await consultAgent(AgentRole.SOFTWARE_ENGINEER, devPrompt, '');
+        const newCode = extractCodeBlock(devResponse);
+
+        if (!newCode) {
+            console.error('Failed to extract code from Developer response.');
+            break;
+        }
+
+        currentCode = newCode;
+        // Save intermediate state
+        fs.writeFileSync(filePath, currentCode);
+        console.log(`   -> Code updated.`);
+
+        // Step 2: QA Engineer (Tester)
+        console.log(`🕵️‍♀️ QA is reviewing...`);
+        const qaResponse = await consultAgent(
+            AgentRole.QA_ENGINEER,
+            `Review the following code implementation for the task: "${task}".
+            
+            Code:
+            \`\`\`typescript
+            ${currentCode}
+            \`\`\`
+            
+            1. Check for logical errors, edge cases, and bugs.
+            2. If the code looks good and meets requirements, strictly say "APPROVED".
+            3. If there are issues, list them clearly as bullet points for the developer to fix.
+            `,
+            ''
+        );
+
+        if (qaResponse.includes('APPROVED')) {
+            console.log(`✅ QA Approved the changes.`);
+            isApproved = true;
+            
+            // Generate final tests
+            console.log(`📝 Generating final Unit Tests...`);
+            const testCodeRaw = await consultAgent(
+                AgentRole.QA_ENGINEER,
+                `Generate comprehensive unit tests (using Jest) for the approved code. Output the full test file content.`,
+                currentCode
+            );
+            const testCode = extractCodeBlock(testCodeRaw);
+            if (testCode) {
+                const testFile = filePath.replace('.ts', '.test.ts');
+                fs.writeFileSync(testFile, testCode);
+                console.log(`   -> Tests saved to ${testFile}`);
+            }
+
+        } else {
+            console.log(`❌ QA found issues:`);
+            console.log(qaResponse);
+            qaFeedback = qaResponse;
+            iteration++;
+        }
+    }
+
+    if (!isApproved) {
+        console.warn(`\n⚠️ Max iterations reached without QA approval. Please review manually.`);
+    } else {
+        console.log(`\n🎉 Dev Cycle Completed Successfully!`);
+    }
+};
+
+const plugin: AutoBotPlugin = {
+    name: 'Dev Cycle Orchestrator',
+    description: 'Orchestrate a feedback loop between Developer and QA agents',
+    command: 'dev-cycle',
+    args: [
+        { name: 'file', description: 'Target file path', required: true },
+        { name: 'task', description: 'Task description', required: true }
+    ],
+    action: async (...args: any[]) => {
+        const file = args[0];
+        const task = args[1];
+        
+        if (typeof file !== 'string' || typeof task !== 'string') {
+             console.error('Usage: npm start -- dev-cycle <file> <task>');
+             return;
+        }
+
+        await runDevCycle(task, file);
+    }
+};
+
+export default plugin;
