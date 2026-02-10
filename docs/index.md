@@ -1,3 +1,8 @@
+---
+layout: default
+title: Home
+---
+
 # 🤖 AutoBot
 
 **AutoBot** is an advanced, AI-driven DevOps assistant designed to automate your software development lifecycle. Built with a modular plugin architecture and powered by a multi-agent AI system, AutoBot acts as your virtual team of experts—handling everything from project planning to quality assurance.

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Command } from 'commander';
 import dotenv from 'dotenv';
 import fs from 'fs';
@@ -34,14 +35,22 @@ const loadPlugins = async () => {
   const pluginFolders = fs.readdirSync(pluginsDir);
 
   for (const folder of pluginFolders) {
-    const pluginPath = path.join(pluginsDir, folder, 'index.ts'); // Assuming dev environment with ts-node
+    const pluginPathTs = path.join(pluginsDir, folder, 'index.ts');
+    const pluginPathJs = path.join(pluginsDir, folder, 'index.js');
     
-    // Check if it exists (or check for index.js if compiled)
-    if (fs.existsSync(pluginPath)) {
-      try {
-        // Dynamic import
-        const pluginModule = await import(pluginPath);
-        const plugin: AutoBotPlugin = pluginModule.default;
+    let pluginPath = '';
+    if (fs.existsSync(pluginPathTs)) {
+      pluginPath = pluginPathTs;
+    } else if (fs.existsSync(pluginPathJs)) {
+      pluginPath = pluginPathJs;
+    } else {
+      continue;
+    }
+
+    try {
+      // Dynamic import
+      const pluginModule = await import(pluginPath);
+      const plugin: AutoBotPlugin = pluginModule.default;
 
         if (plugin && plugin.command) {
           const cmd = program.command(plugin.command)
@@ -63,7 +72,6 @@ const loadPlugins = async () => {
       } catch (error) {
         console.error(`Failed to load plugin from ${folder}:`, error);
       }
-    }
   }
 };
 
