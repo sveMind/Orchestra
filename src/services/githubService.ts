@@ -22,6 +22,22 @@ const octokit = new Octokit({
   auth: githubToken,
 });
 
+export const getDefaultBranch = async (): Promise<string> => {
+    if (!githubToken || !owner || !repo) {
+        return 'main';
+    }
+    try {
+        const { data } = await octokit.repos.get({
+            owner,
+            repo,
+        });
+        return data.default_branch;
+    } catch (error) {
+        console.error('Error fetching default branch:', error);
+        return 'main';
+    }
+};
+
 export const createIssue = async (title: string, body: string, labels: string[] = []): Promise<string | null> => {
     if (!githubToken || !owner || !repo) {
         console.log(`[MOCK GITHUB] Issue Created: ${title}`);
