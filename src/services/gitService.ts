@@ -35,7 +35,8 @@ export const getChangedFiles = async (): Promise<string[]> => {
 
 export const getCommitsSince = async (tagOrCommit: string): Promise<string[]> => {
   try {
-    const log = await git.log({ from: tagOrCommit, to: 'HEAD' });
+    const options = tagOrCommit ? { from: tagOrCommit, to: 'HEAD' } : { n: 50 };
+    const log = await git.log(options);
     return log.all.map(commit => `${commit.hash.substring(0, 7)} - ${commit.message} (${commit.author_name})`);
   } catch (error) {
     console.error(`Error getting commits since ${tagOrCommit}:`, error);
@@ -52,6 +53,18 @@ export const getLatestTag = async (): Promise<string> => {
     return '';
   }
 };
+
+export const getPreviousTag = async (currentTag: string): Promise<string> => {
+    try {
+        // Try to find the tag before the current one using git describe
+        const result = await git.raw(['describe', '--abbrev=0', '--tags', `${currentTag}^`]);
+        return result.trim();
+    } catch (error) {
+        console.warn(`Could not find previous tag for ${currentTag}. Returning empty.`);
+        return '';
+    }
+};
+
 
 export const getDiff = async (filePath: string): Promise<string> => {
     try {

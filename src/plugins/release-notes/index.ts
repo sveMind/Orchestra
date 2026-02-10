@@ -1,6 +1,7 @@
 import { AutoBotPlugin } from '../../types';
 import { generateCompletion } from '../../services/aiService';
-import { getCommitsSince, getLatestTag } from '../../services/gitService';
+import { getCommitsSince, getLatestTag, getPreviousTag } from '../../services/gitService';
+import { createRelease } from '../../services/githubService';
 
 export const generateReleaseNotes = async (version: string): Promise<void> => {
   console.log(`Generating release notes for version: ${version}`);
@@ -8,14 +9,29 @@ export const generateReleaseNotes = async (version: string): Promise<void> => {
   try {
     const latestTag = await getLatestTag();
     let commits: string[] = [];
+    let startTag = latestTag;
 
-    if (latestTag) {
-        console.log(`Fetching commits since last tag: ${latestTag}`);
-        commits = await getCommitsSince(latestTag);
+    if (latestTag === version) {
+        console.log(`Current version ${version} is already tagged.`);
+        const previousTag = await getPreviousTag(version);
+        if (previousTag) {
+            startTag = previousTag;
+            console.log(`Fetching commits since previous tag: ${startTag}`);
+        } else {
+            console.warn('No previous tag found. Fetching all commits.');
+            startTag = '';
+        }
     } else {
-        console.log('No git tags found. Fetching recent commits (limit 50)...');
-        console.warn('Tag based history not fully supported without existing tags. Using empty commit list for demo.');
+        console.log(`Fetching commits since last tag: ${latestTag}`);
     }
+
+    if (startTag) {
+        commits = await getCommitsSince(startTag);
+    } else {
+        console.log('No previous tag found. Fetching recent commits (limit 50)...');
+        commits = await getCommitsSince('');
+    }
+
     
     if (commits.length === 0) {
         console.log('No new commits found.');
@@ -46,6 +62,16 @@ export const generateReleaseNotes = async (version: string): Promise<void> => {
     console.log('\n--- Generated Release Notes ---\n');
     console.log(releaseNotes);
     console.log('\n-------------------------------\n');
+
+    if (releaseNotes) {
+        console.log('Creating GitHub Release...');
+        const releaseUrl = await createRelease(version, `Release ${version}`, releaseNotes);
+        if (releaseUrl) {
+            console.log(`✅ Release created successfully: ${releaseUrl}`);
+        } else {
+            console.error('❌ Failed to create GitHub Release.');
+        }
+    }
 
   } catch (error) {
     console.error('Error generating release notes:', error);

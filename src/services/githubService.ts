@@ -101,3 +101,26 @@ export const addComment = async (issueNumber: number, body: string): Promise<str
         return null;
     }
 };
+
+export const createRelease = async (tagName: string, name: string, body: string): Promise<string | null> => {
+    if (!githubToken || !owner || !repo) {
+        console.log(`[MOCK GITHUB] Release Created: ${name} (${tagName})`);
+        console.log(`[MOCK GITHUB] Release Notes:\n${body}`);
+        return 'https://github.com/mock/repo/releases/tag/v1.0.0';
+    }
+
+    try {
+        const response = await octokit.repos.createRelease({
+            owner,
+            repo,
+            tag_name: tagName,
+            name,
+            body,
+        });
+        return response.data.html_url;
+    } catch (error) {
+        console.error('Error creating GitHub release:', error);
+        return null;
+    }
+};
+
