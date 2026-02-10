@@ -1,4 +1,4 @@
-name: AutoBot Issue Handler
+name: AutoBot Issue Handlers
 
 on:
   issues:
