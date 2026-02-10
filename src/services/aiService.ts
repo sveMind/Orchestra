@@ -126,6 +126,11 @@ export const binarySearch = (arr: number[], target: number): number => {
       model: model,
     });
 
+    if (!completion || !completion.choices || !completion.choices[0] || !completion.choices[0].message) {
+        console.error('Invalid response structure from AI provider:', JSON.stringify(completion, null, 2));
+        throw new Error('Invalid response from AI provider');
+    }
+
     return completion.choices[0].message.content || '';
   } catch (error) {
     console.error('Error calling OpenAI:', error);
