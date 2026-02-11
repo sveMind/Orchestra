@@ -1,12 +1,15 @@
 import { AutoBotPlugin } from '../../types';
 import { consultAgent, AgentRole } from '../../services/agentService';
-import { addComment } from '../../services/githubService';
+import { addComment, addLabels } from '../../services/githubService';
 import { runDevCycle } from '../dev-cycle';
 import path from 'path';
 import fs from 'fs';
 
 export const runAgileWorkflow = async (issueNumber: number, title: string, description: string): Promise<void> => {
     console.log(`\n🚀 Starting Agile Workflow for Issue #${issueNumber}: ${title}`);
+    
+    // Tag the issue
+    await addLabels(issueNumber, ['autobot']);
 
     try {
         // Step 1: Product Manager - Clarify and Plan
@@ -71,7 +74,7 @@ export const runAgileWorkflow = async (issueNumber: number, title: string, descr
         ${smTasks}
         `;
 
-        await runDevCycle(robustTask, targetFile);
+        await runDevCycle(robustTask, targetFile, issueNumber);
 
         // Step 4: Completion
         await addComment(issueNumber, `### ✅ Workflow Complete\n\nCode has been implemented, tested, and a PR has been raised.`);

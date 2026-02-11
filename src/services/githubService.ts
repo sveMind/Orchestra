@@ -102,6 +102,43 @@ export const addComment = async (issueNumber: number, body: string): Promise<str
     }
 };
 
+export const addLabels = async (issueNumber: number, labels: string[]): Promise<void> => {
+    if (!githubToken || !owner || !repo) {
+        console.log(`[MOCK GITHUB] Added labels to #${issueNumber}: ${labels.join(', ')}`);
+        return;
+    }
+    try {
+        await octokit.issues.addLabels({
+            owner,
+            repo,
+            issue_number: issueNumber,
+            labels,
+        });
+    } catch (error) {
+        console.error('Error adding labels:', error);
+    }
+};
+
+export const getPullRequestDiff = async (pullNumber: number): Promise<string | null> => {
+    if (!githubToken || !owner || !repo) {
+        return 'diff --git a/src/index.ts b/src/index.ts\nindex 83a040e..d00491f 100644\n--- a/src/index.ts\n+++ b/src/index.ts\n@@ -1,5 +1,5 @@\n-console.log("Hello");\n+console.log("Hello World");';
+    }
+    try {
+        const response = await octokit.pulls.get({
+            owner,
+            repo,
+            pull_number: pullNumber,
+            mediaType: {
+                format: 'diff'
+            }
+        });
+        return response.data as unknown as string;
+    } catch (error) {
+        console.error('Error fetching PR diff:', error);
+        return null;
+    }
+};
+
 export const createRelease = async (tagName: string, name: string, body: string): Promise<string | null> => {
     if (!githubToken || !owner || !repo) {
         console.log(`[MOCK GITHUB] Release Created: ${name} (${tagName})`);

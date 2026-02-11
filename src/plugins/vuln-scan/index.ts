@@ -73,9 +73,9 @@ ${analysis}
 ## Applied Fix
 The following changes were applied automatically by AutoBot:
 
-\`\`\`typescript
+
 ${fixedCode || fixSuggestion}
-\`\`\`
+
 
 *Reported by AutoBot Security Agent*
     `;
