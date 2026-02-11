@@ -80,7 +80,7 @@ export class AzureDevOpsProvider implements VcsProvider {
                 }
             ];
             // "Task" or "User Story" depends on process template. defaulting to Task.
-            const workItem = await this.workItemApi?.createWorkItem(patchDocument, this.project!, 'Task');
+            const workItem = await this.workItemApi?.createWorkItem({}, patchDocument, this.project!, 'Task');
             return workItem?._links?.html?.href || null;
         } catch (error) {
             console.error('Error creating Azure Work Item:', error);
@@ -122,7 +122,7 @@ export class AzureDevOpsProvider implements VcsProvider {
                     value: body,
                 }
             ];
-            const workItem = await this.workItemApi?.updateWorkItem(patchDocument, issueNumber, this.project!);
+            const workItem = await this.workItemApi?.updateWorkItem({}, patchDocument, issueNumber, this.project!);
             return workItem?._links?.html?.href || null;
         } catch (error) {
             console.error('Error adding comment to Azure Work Item:', error);
@@ -150,7 +150,7 @@ export class AzureDevOpsProvider implements VcsProvider {
                         value: existingTags ? `${existingTags}; ${newTags}` : newTags,
                     }
                 ];
-                await this.workItemApi?.updateWorkItem(patchDocument, issueNumber, this.project!);
+                await this.workItemApi?.updateWorkItem({}, patchDocument, issueNumber, this.project!);
             }
         } catch (error) {
             console.error('Error adding tags to Azure Work Item:', error);
