@@ -1,11 +1,12 @@
 import { AutoBotPlugin } from '../../types';
 import { consultAgent, AgentRole } from '../../services/agentService';
-import { getPullRequestDiff, addComment } from '../../services/githubService';
+import { VcsFactory } from '../../services/vcs/VcsFactory';
 
 export const runPRReview = async (pullNumber: number): Promise<void> => {
     console.log(`\n🕵️‍♂️ Starting PR Review for PR #${pullNumber}...`);
 
-    const diff = await getPullRequestDiff(pullNumber);
+    const vcs = VcsFactory.getProvider();
+    const diff = await vcs.getPullRequestDiff(pullNumber);
     
     if (!diff) {
         console.error('Failed to fetch PR diff.');
@@ -56,7 +57,7 @@ ${poReview}
 ${devReview}
 `;
 
-    await addComment(pullNumber, finalReport);
+    await vcs.addComment(pullNumber, finalReport);
     console.log('✅ PR Review posted.');
 };
 

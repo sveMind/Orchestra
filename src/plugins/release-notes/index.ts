@@ -1,7 +1,7 @@
 import { AutoBotPlugin } from '../../types';
 import { generateCompletion } from '../../services/aiService';
 import { getCommitsSince, getLatestTag, getPreviousTag } from '../../services/gitService';
-import { createRelease } from '../../services/githubService';
+import { VcsFactory } from '../../services/vcs/VcsFactory';
 
 export const generateReleaseNotes = async (version: string): Promise<void> => {
   console.log(`Generating release notes for version: ${version}`);
@@ -64,12 +64,13 @@ export const generateReleaseNotes = async (version: string): Promise<void> => {
     console.log('\n-------------------------------\n');
 
     if (releaseNotes) {
-        console.log('Creating GitHub Release...');
-        const releaseUrl = await createRelease(version, `Release ${version}`, releaseNotes);
+        console.log('Creating Release...');
+        const vcs = VcsFactory.getProvider();
+        const releaseUrl = await vcs.createRelease(version, `Release ${version}`, releaseNotes);
         if (releaseUrl) {
             console.log(`✅ Release created successfully: ${releaseUrl}`);
         } else {
-            console.error('❌ Failed to create GitHub Release.');
+            console.error('❌ Failed to create Release.');
         }
     }
 
