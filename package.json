@@ -1,5 +1,5 @@
 {
-  "name": "autobot",
+  "name": "autobot-svemind",
   "version": "1.0.0",
   "description": "AutoBot is a tool for automating pipeline tasks.",
   "main": "dist/index.js",
