@@ -1,12 +1,50 @@
-name: AutoBot Pipeline
-description: 'Automated pipeline for unit tests, release notes, and security scanning.'
+name: 'AutoBot AI Agent'
+description: 'AI-driven DevOps assistant that automates code reviews, security scans, and testing.'
+author: 'sveMind'
+branding:
+  icon: 'cpu'
+  color: 'blue'
 inputs:
+  command:
+    description: 'The AutoBot command to execute (e.g., auto, vuln-scan, pr-review)'
+    required: true
+    default: 'auto'
+  arguments:
+    description: 'Additional arguments for the command'
+    required: false
+    default: ''
   openai_api_key:
-    description: 'OpenAI API Key'
-    required: true
+    description: 'OpenAI API Key (can also be set as env var)'
+    required: false
   github_token:
-    description: 'GitHub Token'
-    required: true
+    description: 'GitHub Token (can also be set as env var)'
+    required: false
+  version:
+    description: 'Version of AutoBot to install'
+    required: false
+    default: 'latest'
+
 runs:
-  using: 'node16'
-  main: 'dist/index.js'
+  using: "composite"
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Install AutoBot
+      shell: bash
+      run: |
+        echo "Installing AutoBot version: ${{ inputs.version }}"
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          npm install -g autobot-svemind
+        else
+          npm install -g autobot-svemind@${{ inputs.version }}
+        fi
+
+    - name: Run AutoBot
+      shell: bash
+      run: autobot ${{ inputs.command }} ${{ inputs.arguments }}
+      env:
+        OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}

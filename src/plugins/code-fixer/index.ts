@@ -3,7 +3,7 @@ import fs from 'fs';
 import { consultAgent, AgentRole } from '../../services/agentService';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges } from '../../services/gitService';
-import { createPullRequest } from '../../services/githubService';
+import { VcsFactory } from '../../services/vcs/VcsFactory';
 
 export const fixCode = async (filePath: string, instruction?: string): Promise<void> => {
   console.log(`Analyzing ${filePath} for fixes...`);
@@ -59,7 +59,8 @@ export const fixCode = async (filePath: string, instruction?: string): Promise<v
             await commitChanges(commitMsg, [filePath]);
             await pushChanges(branchName);
 
-            const prUrl = await createPullRequest(
+            const vcs = VcsFactory.getProvider();
+            const prUrl = await vcs.createPullRequest(
                 `Fix: ${fileName}`,
                 branchName,
                 'main',

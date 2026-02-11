@@ -133,12 +133,17 @@ autobot release-notes v1.2.0
 
 ## 🌍 Deployment Options
 
-### 1. GitHub Action (CI/CD Pipeline)
-Integrate AutoBot directly into your GitHub Actions workflow.
+AutoBot can be easily integrated into your CI/CD pipelines.
 
-Create `.github/workflows/autobot.yml`:
+### 📚 Integration Guides
+*   **[Pipeline Overview](docs/PIPELINES.md)** - Learn about available agents and commands.
+*   **[GitHub Actions](docs/GITHUB_ACTIONS.md)** - Detailed examples for GitHub workflows.
+*   **[GitLab CI](docs/GITLAB_CI.md)** - Configuration guide for GitLab CI/CD.
+*   **[Integration Configuration](docs/INTEGRATIONS.md)** - Configure multiple providers (GitLab, Azure, Jira).
+
+### Quick Example: GitHub Action
 ```yaml
-name: AutoBot Pipeline
+name: AutoBot Auto-Pilot
 on: [push]
 jobs:
   autobot:
@@ -146,21 +151,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-      - run: npx autobot auto
+      - run: npx autobot-svemind auto
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-### 2. Webhook Server
+### Webhook Server
 Run AutoBot as a standalone server that listens for GitHub Webhooks.
 ```bash
 autobot server
 ```
-- Configure your GitHub Repository Webhook settings to point to your server URL.
-- AutoBot will clone the repo on every push, run the analysis, and perform actions.
 
 ---
 

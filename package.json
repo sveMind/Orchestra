@@ -37,11 +37,15 @@
   },
   "homepage": "https://github.com/sveMind/AutoBot#readme",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@octokit/rest": "^19.0.13",
+    "axios": "^1.13.5",
+    "azure-devops-node-api": "^15.1.2",
     "body-parser": "^2.2.2",
     "commander": "^14.0.3",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
+    "ollama": "^0.6.3",
     "openai": "^6.19.0",
     "simple-git": "^3.30.0"
   },

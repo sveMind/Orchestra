@@ -1,7 +1,7 @@
 import { AutoBotPlugin } from '../../types';
 import fs from 'fs';
 import { consultAgent, AgentRole } from '../../services/agentService';
-import { createIssue, createPullRequest } from '../../services/githubService';
+import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, checkoutBranch } from '../../services/gitService';
 
@@ -64,7 +64,7 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
         console.warn('Could not extract code from AI response. Fix not applied automatically.');
     }
 
-    // Step 4: Create GitHub Issue
+    // Step 4: Create Issue
     const issueTitle = `Security Vulnerability Detected in ${filePath.split('/').pop()}`;
     const issueBody = `
 ## Vulnerability Report
@@ -80,8 +80,9 @@ ${fixedCode || fixSuggestion}
 *Reported by AutoBot Security Agent*
     `;
 
-    console.log('\nCreating GitHub Issue...');
-    const issueUrl = await createIssue(issueTitle, issueBody, ['security', 'autobot', 'auto-fixed']);
+    console.log('\nCreating Issue...');
+    const vcs = VcsFactory.getProvider();
+    const issueUrl = await vcs.createIssue(issueTitle, issueBody, ['security', 'autobot', 'auto-fixed']);
     
     if (issueUrl) {
         console.log(`Issue created successfully: ${issueUrl}`);
@@ -98,7 +99,7 @@ ${fixedCode || fixSuggestion}
                 await commitChanges(`fix(security): resolve vulnerabilities in ${fileName}`, [filePath]);
                 await pushChanges(branchName);
                 
-                const prUrl = await createPullRequest(
+                const prUrl = await vcs.createPullRequest(
                     `Security Fix: ${fileName}`,
                     branchName,
                     'main', // Assuming main is the base branch
@@ -116,7 +117,7 @@ ${fixedCode || fixSuggestion}
             }
         }
     } else {
-        console.log('Failed to create GitHub issue (check API configuration).');
+        console.log('Failed to create issue (check API configuration).');
     }
 
   } catch (error) {

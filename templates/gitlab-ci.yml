@@ -1,0 +1,41 @@
+spec:
+  inputs:
+    image:
+      default: node:20
+      description: "Docker image to use"
+    stage:
+      default: test
+      description: "Pipeline stage to run in"
+
+---
+
+.autobot_base:
+  image: $[[ inputs.image ]]
+  before_script:
+    - npm install -g autobot-svemind
+  variables:
+    VCS_PROVIDER: gitlab
+
+autobot-auto:
+  extends: .autobot_base
+  stage: $[[ inputs.stage ]]
+  script:
+    - autobot auto
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+autobot-vuln-scan:
+  extends: .autobot_base
+  stage: $[[ inputs.stage ]]
+  script:
+    - autobot vuln-scan .
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+autobot-release-notes:
+  extends: .autobot_base
+  stage: deploy
+  script:
+    - autobot release-notes $CI_COMMIT_TAG
+  rules:
+    - if: $CI_COMMIT_TAG

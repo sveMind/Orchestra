@@ -4,7 +4,7 @@ import path from 'path';
 import { consultAgent, AgentRole } from '../../services/agentService';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges } from '../../services/gitService';
-import { createPullRequest, getDefaultBranch } from '../../services/githubService';
+import { VcsFactory } from '../../services/vcs/VcsFactory';
 
 const MAX_ITERATIONS = 3;
 
