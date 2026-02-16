@@ -8,7 +8,7 @@ import { VcsFactory } from '../../services/vcs/VcsFactory';
 
 const MAX_ITERATIONS = 3;
 
-export const runDevCycle = async (task: string, filePath: string, issueNumber?: number): Promise<void> => {
+export const runDevCycle = async (task: string, filePath: string, issueNumber?: number): Promise<string | null> => {
     console.log(`\n🔄 Initiating Dev-QA Orchestration Cycle...`);
     console.log(`Target File: ${filePath}`);
     console.log(`Task: ${task}\n`);
@@ -23,6 +23,8 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
     let iteration = 1;
     let qaFeedback = '';
     let isApproved = false;
+
+    let createdPrUrl: string | null = null;
 
     while (iteration <= MAX_ITERATIONS && !isApproved) {
         console.log(`\n--- Iteration ${iteration}/${MAX_ITERATIONS} ---`);
@@ -113,6 +115,12 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
                 
                 if (prUrl) {
                     console.log(`🚀 Pull Request created: ${prUrl}`);
+                    createdPrUrl = prUrl;
+                    // Sync PR to the Issue if provided
+                    if (typeof issueNumber === 'number') {
+                        await vcs.addComment(issueNumber, `### 🔗 Linked PR\n${prUrl}\n\nStatus: In Review`);
+                        await vcs.addLabels(issueNumber, ['in-review']);
+                    }
                 } else {
                     console.error('❌ Failed to create Pull Request. Check logs for details.');
                 }
@@ -133,6 +141,7 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
     } else {
         console.log(`\n🎉 Dev Cycle Completed Successfully!`);
     }
+    return createdPrUrl;
 };
 
 const plugin: AutoBotPlugin = {

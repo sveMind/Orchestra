@@ -75,10 +75,10 @@ export const runAgileWorkflow = async (issueNumber: number, title: string, descr
         ${smTasks}
         `;
 
-        await runDevCycle(robustTask, targetFile, issueNumber);
+        const prUrl = await runDevCycle(robustTask, targetFile, issueNumber);
 
         // Step 4: Completion
-        await vcs.addComment(issueNumber, `### ✅ Workflow Complete\n\nCode has been implemented, tested, and a PR has been raised.`);
+        await vcs.addComment(issueNumber, `### ✅ Workflow Complete\n\nCode has been implemented and tested.\n\n### 🔗 PR\n${prUrl || 'PR link unavailable.'}`);
 
     } catch (error) {
         console.error('Error in Agile Workflow:', error);
