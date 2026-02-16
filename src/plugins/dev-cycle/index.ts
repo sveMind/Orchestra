@@ -5,6 +5,7 @@ import { consultAgent, AgentRole } from '../../services/agentService';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges } from '../../services/gitService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
+import { runMergeCandidates } from '../../services/agentOrchestrator';
 
 const MAX_ITERATIONS = 3;
 
@@ -65,12 +66,11 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
                 break;
             }
 
-            const mergedResponse = await consultAgent(
+            const mergedResponse = await runMergeCandidates(
                 AgentRole.SOFTWARE_ENGINEER,
-                `Multiple developers have produced alternative full file implementations for the same task.\n\nTask: ${task}\n\nCombine the best parts of these implementations into a single, consistent full file. Preserve correctness and readability. Return only the final full file content.\n\nImplementations:\n\n${candidateCodes
-                    .map((code, index) => `Implementation ${index + 1}:\n\`\`\`typescript\n${code}\n\`\`\``)
-                    .join('\n\n')}`,
-                ''
+                `Multiple developers have produced alternative full file implementations for the same task.\n\nTask: ${task}\n\nCombine the best parts of these implementations into a single, consistent full file. Preserve correctness and readability. Return only the final full file content.`,
+                candidateCodes,
+                'typescript'
             );
 
             newCode = extractCodeBlock(mergedResponse);

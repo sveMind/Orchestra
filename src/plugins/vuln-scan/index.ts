@@ -4,6 +4,7 @@ import { consultAgent, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, checkoutBranch } from '../../services/gitService';
+import { runMergeCandidates } from '../../services/agentOrchestrator';
 
 export const scanForVulnerabilities = async (filePath: string, applyFix: boolean = false): Promise<void> => {
   console.log(`Scanning for vulnerabilities in: ${filePath}`);
@@ -22,7 +23,6 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
        contentToScan = fs.readFileSync(filePath, 'utf-8');
     }
 
-    // Step 1: Security Engineer analyzes
     const analysis = await consultAgent(
         AgentRole.SECURITY_ENGINEER, 
         'Analyze the provided code for security vulnerabilities. If issues found, list them clearly. If none, strictly say "NO_ISSUES".', 
@@ -37,13 +37,48 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
     console.log('\n--- Vulnerability Analysis ---\n');
     console.log(analysis);
 
-    // Step 2: Software Engineer generates fix
-    console.log('\nGenerating fix suggestion...');
-    const fixSuggestion = await consultAgent(
-        AgentRole.SOFTWARE_ENGINEER,
-        'Based on the security analysis, provide the FULL refactored file content that fixes the vulnerabilities. Wrap the code in a markdown code block (```).',
-        `Original Code:\n${contentToScan}\n\nAnalysis:\n${analysis}`
-    );
+    console.log('\nGenerating fix suggestion from multiple developers...');
+    const baseFixTask = 'Based on the security analysis, provide the FULL refactored file content that fixes the vulnerabilities. Wrap the code in a markdown code block (```typescript).';
+
+    const devPromises: Promise<string>[] = [];
+    const devAgentsCount = 2;
+    for (let i = 0; i < devAgentsCount; i++) {
+        const devTask = `${baseFixTask}\n\nYou are Developer ${i + 1}.`;
+        devPromises.push(
+            consultAgent(
+                AgentRole.SOFTWARE_ENGINEER,
+                devTask,
+                `Original Code:\n${contentToScan}\n\nAnalysis:\n${analysis}`
+            )
+        );
+    }
+
+    const devFixes = await Promise.all(devPromises);
+    const candidateFixes = devFixes
+        .map(f => extractCodeBlock(f))
+        .filter(f => !!f) as string[];
+
+    let fixSuggestion = '';
+
+    if (candidateFixes.length === 0) {
+        console.warn('No valid fix candidates extracted from developer agents. Falling back to single-agent fix.');
+        const singleFix = await consultAgent(
+            AgentRole.SOFTWARE_ENGINEER,
+            baseFixTask,
+            `Original Code:\n${contentToScan}\n\nAnalysis:\n${analysis}`
+        );
+        fixSuggestion = singleFix;
+    } else if (candidateFixes.length === 1) {
+        fixSuggestion = candidateFixes[0];
+    } else {
+        const mergedFix = await runMergeCandidates(
+            AgentRole.SOFTWARE_ENGINEER,
+            'Multiple developers have proposed fixes for the security vulnerabilities. Combine the best aspects into a single, secure refactored file. Return only the final full file content.',
+            candidateFixes,
+            'typescript'
+        );
+        fixSuggestion = mergedFix;
+    }
 
     console.log('\n--- Suggested Fix ---\n');
     console.log(fixSuggestion);

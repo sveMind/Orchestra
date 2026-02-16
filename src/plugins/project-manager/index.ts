@@ -1,6 +1,7 @@
 import { AutoBotPlugin } from '../../types';
 import { consultAgent, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
+import { runFacilitatedDiscussion } from '../../services/agentOrchestrator';
 import fs from 'fs';
 
 export const manageProject = async (input: string, instruction?: string): Promise<void> => {
@@ -37,18 +38,35 @@ export const manageProject = async (input: string, instruction?: string): Promis
     );
     console.log(`\n[Architect]:\n${architectDesign}`);
 
-    // Step 3: Team Huddle (Parallel Consultation)
     console.log(`\nGathering Team Input (Huddle)...`);
     const [devInput, qaInput, secInput] = await Promise.all([
-        consultAgent(AgentRole.SOFTWARE_ENGINEER, 'Review the requirements and architecture. Identify key implementation challenges and libraries needed.', `${pmAnalysis}\n${architectDesign}`),
-        consultAgent(AgentRole.QA_ENGINEER, 'Review the requirements. Outline the testing strategy and key test cases.', pmAnalysis),
-        consultAgent(AgentRole.SECURITY_ENGINEER, 'Review the architecture. Identify potential security risks and mitigations.', architectDesign)
+        consultAgent(
+            AgentRole.SOFTWARE_ENGINEER,
+            'Review the requirements and architecture. Identify key implementation challenges and libraries needed.',
+            `${pmAnalysis}\n${architectDesign}`
+        ),
+        consultAgent(
+            AgentRole.QA_ENGINEER,
+            'Review the requirements. Outline the testing strategy and key test cases.',
+            pmAnalysis
+        ),
+        consultAgent(
+            AgentRole.SECURITY_ENGINEER,
+            'Review the architecture. Identify potential security risks and mitigations.',
+            architectDesign
+        )
     ]);
 
-    const teamDiscussion = await consultAgent(
+    const teamDiscussion = await runFacilitatedDiscussion(
         AgentRole.SCRUM_MASTER,
-        'Act as a facilitator. Simulate a short structured conversation between Product Manager, Architect, Developer, QA Engineer, and Security Engineer about this project. Each role should respond briefly, refer to the others when relevant, and reach a shared agreement. At the end, output a concise "Team Agreement" summary.',
-        `Requirements:\n${pmAnalysis}\n\nArchitecture:\n${architectDesign}\n\nDev Notes:\n${devInput}\n\nQA Strategy:\n${qaInput}\n\nSecurity Risks:\n${secInput}`
+        [
+            { role: AgentRole.PRODUCT_MANAGER, message: pmAnalysis },
+            { role: AgentRole.ARCHITECT, message: architectDesign },
+            { role: AgentRole.SOFTWARE_ENGINEER, message: devInput },
+            { role: AgentRole.QA_ENGINEER, message: qaInput },
+            { role: AgentRole.SECURITY_ENGINEER, message: secInput }
+        ],
+        'Project planning and task breakdown'
     );
 
     // Step 4: Scrum Master breaks it down into tasks

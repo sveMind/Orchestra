@@ -1,6 +1,7 @@
 import { AutoBotPlugin } from '../../types';
 import { consultAgent, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
+import { runParallelAgents, runFacilitatedDiscussion } from '../../services/agentOrchestrator';
 
 export const runPRReview = async (pullNumber: number): Promise<void> => {
     console.log(`\n🕵️‍♂️ Starting PR Review for PR #${pullNumber}...`);
@@ -13,48 +14,57 @@ export const runPRReview = async (pullNumber: number): Promise<void> => {
         return;
     }
 
-    // Step 1: Product Owner Review (Validation)
-    console.log('🤖 Product Owner is reviewing...');
-    const poReview = await consultAgent(
-        AgentRole.PRODUCT_MANAGER,
-        `Review the following code changes (diff) and verify if they align with general product quality standards.
-        
-        Diff:
-        ${diff.substring(0, 3000)}... (truncated if too long)
-        
-        Output:
-        - Assessment of functionality based on code changes.
-        - Any obvious missing requirements?
-        - Is it "APPROVED" or "NEEDS WORK"?
-        `,
-        ''
-    );
+    const truncatedDiff = diff.substring(0, 3000);
 
-    // Step 2: Developer Review (Code Quality)
-    console.log('🤖 Senior Developer is reviewing...');
-    const devReview = await consultAgent(
-        AgentRole.SOFTWARE_ENGINEER,
-        `Review the following code changes (diff) for code quality, bugs, and best practices.
-        
-        Diff:
-        ${diff.substring(0, 3000)}... (truncated if too long)
-        
-        Output:
-        - Code Quality Score (1-10)
-        - Potential Bugs or Security Issues
-        - Refactoring Suggestions
-        - Is it "APPROVED" or "CHANGES REQUESTED"?
-        `,
-        ''
+    console.log('🤖 Product Owner and Senior Developer are reviewing in parallel...');
+    const [poExchange, devExchange] = await runParallelAgents([
+        {
+            role: AgentRole.PRODUCT_MANAGER,
+            task: `Review the following code changes (diff) and verify if they align with general product quality standards.
+            
+            Diff:
+            ${truncatedDiff}
+            
+            Output:
+            - Assessment of functionality based on code changes.
+            - Any obvious missing requirements?
+            - Is it "APPROVED" or "NEEDS WORK"?
+            `,
+            context: ''
+        },
+        {
+            role: AgentRole.SOFTWARE_ENGINEER,
+            task: `Review the following code changes (diff) for code quality, bugs, and best practices.
+            
+            Diff:
+            ${truncatedDiff}
+            
+            Output:
+            - Code Quality Score (1-10)
+            - Potential Bugs or Security Issues
+            - Refactoring Suggestions
+            - Is it "APPROVED" or "CHANGES REQUESTED"?
+            `,
+            context: ''
+        }
+    ]);
+
+    const teamSummary = await runFacilitatedDiscussion(
+        AgentRole.SCRUM_MASTER,
+        [poExchange, devExchange],
+        'Pull Request review and readiness decision'
     );
 
     const finalReport = `### 🤖 AutoBot PR Review
 
 #### 👔 Product Owner Review
-${poReview}
+${poExchange.message}
 
 #### 👨‍💻 Tech Review
-${devReview}
+${devExchange.message}
+
+#### 🧠 Team Summary
+${teamSummary}
 `;
 
     await vcs.addComment(pullNumber, finalReport);
