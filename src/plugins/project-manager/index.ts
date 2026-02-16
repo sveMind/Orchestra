@@ -45,11 +45,17 @@ export const manageProject = async (input: string, instruction?: string): Promis
         consultAgent(AgentRole.SECURITY_ENGINEER, 'Review the architecture. Identify potential security risks and mitigations.', architectDesign)
     ]);
 
+    const teamDiscussion = await consultAgent(
+        AgentRole.SCRUM_MASTER,
+        'Act as a facilitator. Simulate a short structured conversation between Product Manager, Architect, Developer, QA Engineer, and Security Engineer about this project. Each role should respond briefly, refer to the others when relevant, and reach a shared agreement. At the end, output a concise "Team Agreement" summary.',
+        `Requirements:\n${pmAnalysis}\n\nArchitecture:\n${architectDesign}\n\nDev Notes:\n${devInput}\n\nQA Strategy:\n${qaInput}\n\nSecurity Risks:\n${secInput}`
+    );
+
     // Step 4: Scrum Master breaks it down into tasks
     const tasksRaw = await consultAgent(
         AgentRole.SCRUM_MASTER,
         'Break this project down into a list of actionable tasks for the dev team. Output as a JSON list of short strings (max 14 words each). No extra explanations.',
-        `Requirements:\n${pmAnalysis}\n\nArchitecture:\n${architectDesign}\n\nDev Notes:\n${devInput}\n\nQA Strategy:\n${qaInput}\n\nSecurity Risks:\n${secInput}`
+        `Requirements:\n${pmAnalysis}\n\nArchitecture:\n${architectDesign}\n\nDev Notes:\n${devInput}\n\nQA Strategy:\n${qaInput}\n\nSecurity Risks:\n${secInput}\n\nTeam Discussion:\n${teamDiscussion}`
     );
     
     // Attempt to parse JSON tasks, fallback to splitting lines if AI fails strict JSON
@@ -84,6 +90,9 @@ ${qaInput}
 
 ## Security Considerations
 ${secInput}
+
+## Team Discussion
+${teamDiscussion}
 
 ## Task List
 ${tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}

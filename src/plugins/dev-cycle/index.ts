@@ -35,8 +35,46 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
             ? `Task: ${task}\n\nExisting Code:\n${currentCode || '(New File)'}\n\nImplement the requested feature/fix. Return the FULL file content.`
             : `Task: ${task}\n\nCurrent Code:\n${currentCode}\n\nQA Feedback:\n${qaFeedback}\n\nFix the issues identified by QA. Return the FULL file content.`;
 
-        const devResponse = await consultAgent(AgentRole.SOFTWARE_ENGINEER, devPrompt, '');
-        const newCode = extractCodeBlock(devResponse);
+        const codeSize = currentCode.length;
+        let devAgentsCount = 1;
+        if (codeSize > 4000 && codeSize <= 12000) {
+            devAgentsCount = 2;
+        } else if (codeSize > 12000) {
+            devAgentsCount = 3;
+        }
+
+        let newCode = '';
+
+        if (devAgentsCount === 1) {
+            const devResponse = await consultAgent(AgentRole.SOFTWARE_ENGINEER, devPrompt, '');
+            newCode = extractCodeBlock(devResponse);
+        } else {
+            console.log(`Spawning ${devAgentsCount} developer agents in parallel...`);
+            const devPromises: Promise<string>[] = [];
+            for (let i = 0; i < devAgentsCount; i++) {
+                const parallelPrompt = `${devPrompt}\n\nYou are Developer ${i + 1}. Provide a complete file implementation.`;
+                devPromises.push(consultAgent(AgentRole.SOFTWARE_ENGINEER, parallelPrompt, ''));
+            }
+            const devResponses = await Promise.all(devPromises);
+            const candidateCodes = devResponses
+                .map(r => extractCodeBlock(r))
+                .filter(c => !!c) as string[];
+
+            if (candidateCodes.length === 0) {
+                console.error('Failed to extract code from parallel Developer responses.');
+                break;
+            }
+
+            const mergedResponse = await consultAgent(
+                AgentRole.SOFTWARE_ENGINEER,
+                `Multiple developers have produced alternative full file implementations for the same task.\n\nTask: ${task}\n\nCombine the best parts of these implementations into a single, consistent full file. Preserve correctness and readability. Return only the final full file content.\n\nImplementations:\n\n${candidateCodes
+                    .map((code, index) => `Implementation ${index + 1}:\n\`\`\`typescript\n${code}\n\`\`\``)
+                    .join('\n\n')}`,
+                ''
+            );
+
+            newCode = extractCodeBlock(mergedResponse);
+        }
 
         if (!newCode) {
             console.error('Failed to extract code from Developer response.');
