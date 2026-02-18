@@ -6,6 +6,7 @@ import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { runMergeCandidates } from '../../services/agentOrchestrator';
+import { generateTests } from '../test-gen';
 
 const MAX_ITERATIONS = 3;
 
@@ -15,6 +16,18 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
     console.log(`Task: ${task}\n`);
 
     let currentCode = '';
+    const ext = path.extname(filePath).toLowerCase();
+    let codeLanguage = 'typescript';
+    
+    if (ext === '.py') {
+        codeLanguage = 'python';
+    } else if (ext === '.js' || ext === '.jsx') {
+        codeLanguage = 'javascript';
+    } else if (ext === '.c' || ext === '.h') {
+        codeLanguage = 'c';
+    } else if (ext === '.java') {
+        codeLanguage = 'java';
+    }
     
     // Check if file exists to load initial context
     if (fs.existsSync(filePath)) {
@@ -48,7 +61,7 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
 
         if (devAgentsCount === 1) {
             const devResponse = await consultAgent(AgentRole.SOFTWARE_ENGINEER, devPrompt, '');
-            newCode = extractCodeBlock(devResponse);
+            newCode = extractCodeBlock(devResponse) || devResponse;
         } else {
             console.log(`Spawning ${devAgentsCount} developer agents in parallel...`);
             const devPromises: Promise<string>[] = [];
@@ -58,7 +71,7 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
             }
             const devResponses = await Promise.all(devPromises);
             const candidateCodes = devResponses
-                .map(r => extractCodeBlock(r))
+                .map(r => extractCodeBlock(r) || r)
                 .filter(c => !!c) as string[];
 
             if (candidateCodes.length === 0) {
@@ -70,10 +83,9 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
                 AgentRole.SOFTWARE_ENGINEER,
                 `Multiple developers have produced alternative full file implementations for the same task.\n\nTask: ${task}\n\nCombine the best parts of these implementations into a single, consistent full file. Preserve correctness and readability. Return only the final full file content.`,
                 candidateCodes,
-                'typescript'
+                codeLanguage
             );
-
-            newCode = extractCodeBlock(mergedResponse);
+            newCode = extractCodeBlock(mergedResponse) || mergedResponse;
         }
 
         if (!newCode) {
@@ -92,15 +104,15 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
             AgentRole.QA_ENGINEER,
             `Review the following code implementation for the task: "${task}".
             
-            Code:
-            \`\`\`typescript
-            ${currentCode}
-            \`\`\`
+Code:
+\`\`\`${codeLanguage}
+${currentCode}
+\`\`\`
             
-            1. Check for logical errors, edge cases, and bugs.
-            2. If the code looks good and meets requirements, strictly say "APPROVED".
-            3. If there are issues, list them clearly as bullet points for the developer to fix.
-            `,
+1. Check for logical errors, edge cases, and bugs.
+2. If the code looks good and meets requirements, strictly say "APPROVED".
+3. If there are issues, list them clearly as bullet points for the developer to fix.
+`,
             ''
         );
 
@@ -108,18 +120,11 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
             console.log(`✅ QA Approved the changes.`);
             isApproved = true;
             
-            // Generate final tests
             console.log(`📝 Generating final Unit Tests...`);
-            const testCodeRaw = await consultAgent(
-                AgentRole.QA_ENGINEER,
-                `Generate comprehensive unit tests (using Jest) for the approved code. Output the full test file content.`,
-                currentCode
-            );
-            const testCode = extractCodeBlock(testCodeRaw);
-            if (testCode) {
-                const testFile = filePath.replace('.ts', '.test.ts');
-                fs.writeFileSync(testFile, testCode);
-                console.log(`   -> Tests saved to ${testFile}`);
+            try {
+                await generateTests(filePath);
+            } catch (testError) {
+                console.warn('Failed to auto-generate tests for this file:', testError);
             }
 
             const branchName = buildBranchName('feature', task);

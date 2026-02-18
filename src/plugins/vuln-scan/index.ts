@@ -1,5 +1,6 @@
 import { AutoBotPlugin } from '../../types';
 import fs from 'fs';
+import path from 'path';
 import { consultAgent, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { extractCodeBlock } from '../../utils/codeExtractor';
@@ -16,6 +17,17 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
     }
 
     let contentToScan = '';
+    const ext = path.extname(filePath).toLowerCase();
+    let codeLanguage = 'typescript';
+    if (ext === '.py') {
+        codeLanguage = 'python';
+    } else if (ext === '.js' || ext === '.jsx') {
+        codeLanguage = 'javascript';
+    } else if (ext === '.c' || ext === '.h') {
+        codeLanguage = 'c';
+    } else if (ext === '.java') {
+        codeLanguage = 'java';
+    }
     if (fs.lstatSync(filePath).isDirectory()) {
        console.warn('Directory scanning is experimental. Please point to a specific file.');
        return;
@@ -38,7 +50,8 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
     console.log(analysis);
 
     console.log('\nGenerating fix suggestion from multiple developers...');
-    const baseFixTask = 'Based on the security analysis, provide the FULL refactored file content that fixes the vulnerabilities. Wrap the code in a markdown code block (```typescript).';
+    const baseFixTask = `Based on the security analysis, provide ONLY the FULL refactored file content that fixes the vulnerabilities.
+Do not include explanations or markdown formatting.`;
 
     const devPromises: Promise<string>[] = [];
     const devAgentsCount = 2;
@@ -55,7 +68,7 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
 
     const devFixes = await Promise.all(devPromises);
     const candidateFixes = devFixes
-        .map(f => extractCodeBlock(f))
+        .map(f => extractCodeBlock(f) || f)
         .filter(f => !!f) as string[];
 
     let fixSuggestion = '';
@@ -75,7 +88,7 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
             AgentRole.SOFTWARE_ENGINEER,
             'Multiple developers have proposed fixes for the security vulnerabilities. Combine the best aspects into a single, secure refactored file. Return only the final full file content.',
             candidateFixes,
-            'typescript'
+            codeLanguage
         );
         fixSuggestion = mergedFix;
     }
@@ -87,7 +100,7 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
     // For now, we'll check if the user passed a flag or if we just want to do it safely.
     // The user asked "write a fix", so let's do it with a backup.
     
-    const fixedCode = extractCodeBlock(fixSuggestion);
+    const fixedCode = extractCodeBlock(fixSuggestion) || fixSuggestion;
     if (fixedCode) {
         const backupPath = `${filePath}.bak`;
         fs.writeFileSync(backupPath, contentToScan);

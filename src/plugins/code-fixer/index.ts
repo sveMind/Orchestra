@@ -1,5 +1,6 @@
 import { AutoBotPlugin } from '../../types';
 import fs from 'fs';
+import path from 'path';
 import { consultAgent, AgentRole } from '../../services/agentService';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
@@ -15,6 +16,19 @@ export const fixCode = async (filePath: string, instruction?: string): Promise<v
     }
 
     const content = fs.readFileSync(filePath, 'utf-8');
+    const ext = path.extname(filePath).toLowerCase();
+    let codeLanguage = '';
+
+    if (ext === '.ts' || ext === '.tsx' || ext === '.js' || ext === '.jsx') {
+        codeLanguage = 'typescript';
+    } else if (ext === '.py') {
+        codeLanguage = 'python';
+    } else if (ext === '.c' || ext === '.h') {
+        codeLanguage = 'c';
+    } else if (ext === '.java') {
+        codeLanguage = 'java';
+    }
+
     const task = instruction || 'Fix any bugs, logical errors, or code smells in the following code.';
 
     // Step 1: Software Engineer analyzes and fixes
@@ -22,17 +36,16 @@ export const fixCode = async (filePath: string, instruction?: string): Promise<v
         AgentRole.SOFTWARE_ENGINEER,
         `Task: ${task}
         
-        Instructions:
-        1. Analyze the code provided below.
-        2. Apply the necessary fixes or refactoring based on the task.
-        3. Output the FULL corrected file content.
-        4. Wrap the code in a markdown code block (e.g., \`\`\`typescript ... \`\`\`).
-        5. Do not output partial code.
-        `,
+Instructions:
+1. Analyze the code provided below.
+2. Apply the necessary fixes or refactoring based on the task.
+3. Output ONLY the FULL corrected file content, with no explanations or markdown formatting.
+4. Do not output partial code.
+`,
         content
     );
 
-    const fixedCode = extractCodeBlock(fixSuggestion);
+    const fixedCode = extractCodeBlock(fixSuggestion) || fixSuggestion;
 
     if (fixedCode) {
         if (fixedCode === content.trim()) {
