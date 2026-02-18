@@ -2,7 +2,7 @@ import { AutoBotPlugin } from '../../types';
 import fs from 'fs';
 import { consultAgent, AgentRole } from '../../services/agentService';
 import { extractCodeBlock } from '../../utils/codeExtractor';
-import { createBranch, commitChanges, pushChanges } from '../../services/gitService';
+import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 
 export const fixCode = async (filePath: string, instruction?: string): Promise<void> => {
@@ -48,9 +48,8 @@ export const fixCode = async (filePath: string, instruction?: string): Promise<v
         console.log(`✅ Applied fix to: ${filePath}`);
 
         // Create Branch and PR
-        const timestamp = new Date().getTime();
-        const branchName = `autobot/fix-code-${timestamp}`;
         const fileName = filePath.split('/').pop();
+        const branchName = buildBranchName('fix-code', instruction || fileName || '');
         const commitMsg = instruction ? `fix: ${instruction}` : `refactor: update ${fileName}`;
 
         try {

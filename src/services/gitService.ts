@@ -75,6 +75,26 @@ export const getDiff = async (filePath: string): Promise<string> => {
     }
 }
 
+const slugifyBranchPart = (input: string): string => {
+    return input
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .substring(0, 40);
+};
+
+export const buildBranchName = (kind: string, context?: string): string => {
+    const parts: string[] = ['autobot', kind];
+    if (context) {
+        const slug = slugifyBranchPart(context);
+        if (slug) {
+            parts.push(slug);
+        }
+    }
+    const suffix = Date.now().toString(36);
+    return `${parts.join('/')}-${suffix}`;
+};
+
 export const createBranch = async (branchName: string): Promise<void> => {
     try {
         await git.checkoutLocalBranch(branchName);

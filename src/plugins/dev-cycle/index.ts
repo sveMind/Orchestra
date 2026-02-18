@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { consultAgent, AgentRole } from '../../services/agentService';
 import { extractCodeBlock } from '../../utils/codeExtractor';
-import { createBranch, commitChanges, pushChanges } from '../../services/gitService';
+import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { runMergeCandidates } from '../../services/agentOrchestrator';
 
@@ -122,9 +122,7 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
                 console.log(`   -> Tests saved to ${testFile}`);
             }
 
-            // Create Branch and PR
-            const timestamp = new Date().getTime();
-            const branchName = `autobot/feature-${timestamp}`;
+            const branchName = buildBranchName('feature', task);
             const fileName = filePath.split('/').pop();
             
             try {

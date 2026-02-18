@@ -3,7 +3,7 @@ import fs from 'fs';
 import { consultAgent, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { extractCodeBlock } from '../../utils/codeExtractor';
-import { createBranch, commitChanges, pushChanges, checkoutBranch } from '../../services/gitService';
+import { createBranch, commitChanges, pushChanges, checkoutBranch, buildBranchName } from '../../services/gitService';
 import { runMergeCandidates } from '../../services/agentOrchestrator';
 
 export const scanForVulnerabilities = async (filePath: string, applyFix: boolean = false): Promise<void> => {
@@ -124,9 +124,8 @@ ${fixedCode || fixSuggestion}
         
         // Step 5: Create Branch and PR
         if (fixedCode) {
-            const timestamp = new Date().getTime();
-            const branchName = `autobot/fix-security-${timestamp}`;
             const fileName = filePath.split('/').pop();
+            const branchName = buildBranchName('fix-security', fileName || '');
             
             try {
                 console.log(`\nInitiating Git workflow for fix...`);
