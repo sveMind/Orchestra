@@ -5,6 +5,7 @@ import { consultAgent, AgentRole } from '../../services/agentService';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
+import { inferLanguageFromExtension } from '../../services/languageUtils';
 
 export const fixCode = async (filePath: string, instruction?: string): Promise<void> => {
   console.log(`Analyzing ${filePath} for fixes...`);
@@ -16,18 +17,7 @@ export const fixCode = async (filePath: string, instruction?: string): Promise<v
     }
 
     const content = fs.readFileSync(filePath, 'utf-8');
-    const ext = path.extname(filePath).toLowerCase();
-    let codeLanguage = '';
-
-    if (ext === '.ts' || ext === '.tsx' || ext === '.js' || ext === '.jsx') {
-        codeLanguage = 'typescript';
-    } else if (ext === '.py') {
-        codeLanguage = 'python';
-    } else if (ext === '.c' || ext === '.h') {
-        codeLanguage = 'c';
-    } else if (ext === '.java') {
-        codeLanguage = 'java';
-    }
+    const codeLanguage = inferLanguageFromExtension(filePath);
 
     const task = instruction || 'Fix any bugs, logical errors, or code smells in the following code.';
 

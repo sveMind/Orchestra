@@ -6,6 +6,7 @@ import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, checkoutBranch, buildBranchName } from '../../services/gitService';
 import { runMergeCandidates } from '../../services/agentOrchestrator';
+import { inferLanguageFromExtension } from '../../services/languageUtils';
 
 export const scanForVulnerabilities = async (filePath: string, applyFix: boolean = false): Promise<void> => {
   console.log(`Scanning for vulnerabilities in: ${filePath}`);
@@ -17,17 +18,7 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
     }
 
     let contentToScan = '';
-    const ext = path.extname(filePath).toLowerCase();
-    let codeLanguage = 'typescript';
-    if (ext === '.py') {
-        codeLanguage = 'python';
-    } else if (ext === '.js' || ext === '.jsx') {
-        codeLanguage = 'javascript';
-    } else if (ext === '.c' || ext === '.h') {
-        codeLanguage = 'c';
-    } else if (ext === '.java') {
-        codeLanguage = 'java';
-    }
+    const codeLanguage = inferLanguageFromExtension(filePath);
     if (fs.lstatSync(filePath).isDirectory()) {
        console.warn('Directory scanning is experimental. Please point to a specific file.');
        return;

@@ -4,6 +4,7 @@ import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { runDevCycle } from '../dev-cycle';
 import path from 'path';
 import fs from 'fs';
+import { inferLanguageFromText, getExtensionForLanguage, getFeatureSlugFromTitle } from '../../services/languageUtils';
 
 export const runAgileWorkflow = async (issueNumber: number, title: string, description: string): Promise<void> => {
     console.log(`\n🚀 Starting Agile Workflow for Issue #${issueNumber}: ${title}`);
@@ -54,10 +55,10 @@ export const runAgileWorkflow = async (issueNumber: number, title: string, descr
         // Step 3: Developer & QA Execution (Trigger Dev Cycle)
         console.log('\n--- Step 3: Execution (Dev & QA) ---');
         
-        // Heuristic: Determine target file from title (simplified for now)
-        // In a real scenario, the Scrum Master could output a JSON with the file path.
-        const safeTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '-');
-        const targetFile = path.join(process.cwd(), 'src', 'features', `${safeTitle}.ts`);
+        const safeTitle = getFeatureSlugFromTitle(title);
+        const languageHint = inferLanguageFromText(`${title}\n${description}\n${pmPlan}\n${smTasks}`);
+        const fileExt = getExtensionForLanguage(languageHint);
+        const targetFile = path.join(process.cwd(), 'src', 'features', `${safeTitle}${fileExt}`);
         
         // Ensure dir exists
         const dir = path.dirname(targetFile);

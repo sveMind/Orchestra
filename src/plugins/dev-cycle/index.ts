@@ -6,6 +6,7 @@ import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { runMergeCandidates } from '../../services/agentOrchestrator';
+import { inferLanguageFromExtension } from '../../services/languageUtils';
 import { generateTests } from '../test-gen';
 
 const MAX_ITERATIONS = 3;
@@ -16,18 +17,7 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
     console.log(`Task: ${task}\n`);
 
     let currentCode = '';
-    const ext = path.extname(filePath).toLowerCase();
-    let codeLanguage = 'typescript';
-    
-    if (ext === '.py') {
-        codeLanguage = 'python';
-    } else if (ext === '.js' || ext === '.jsx') {
-        codeLanguage = 'javascript';
-    } else if (ext === '.c' || ext === '.h') {
-        codeLanguage = 'c';
-    } else if (ext === '.java') {
-        codeLanguage = 'java';
-    }
+    const codeLanguage = inferLanguageFromExtension(filePath);
     
     // Check if file exists to load initial context
     if (fs.existsSync(filePath)) {
