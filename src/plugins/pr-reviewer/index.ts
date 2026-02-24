@@ -1,4 +1,4 @@
-import { AutoBotPlugin } from '../../types';
+import { OrchestraPlugin } from '../../types';
 import { consultAgent, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { runParallelAgents, runFacilitatedDiscussion } from '../../services/agentOrchestrator';
@@ -55,7 +55,7 @@ export const runPRReview = async (pullNumber: number): Promise<void> => {
         'Pull Request review and readiness decision'
     );
 
-    const finalReport = `### 🤖 AutoBot PR Review
+    const finalReport = `### 🤖 Orchestra PR Review
 
 #### 👔 Product Owner Review
 ${poExchange.message}
@@ -71,7 +71,7 @@ ${teamSummary}
     console.log('✅ PR Review posted.');
 };
 
-const plugin: AutoBotPlugin = {
+const plugin: OrchestraPlugin = {
     name: 'PR Reviewer',
     description: 'Automated PR Review by PM and Dev Agents',
     command: 'pr-review',

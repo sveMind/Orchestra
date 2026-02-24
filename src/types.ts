@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 
-export interface AutoBotPlugin {
+export interface OrchestraPlugin {
   name: string;
   description: string;
   command: string;

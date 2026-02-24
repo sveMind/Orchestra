@@ -1,10 +1,10 @@
 {
-  "name": "autobot-svemind",
+  "name": "orchestra-svemind",
   "version": "1.0.0",
-  "description": "AutoBot is a tool for automating pipeline tasks.",
+  "description": "Orchestra is a tool for automating pipeline tasks.",
   "main": "dist/index.js",
   "bin": {
-    "autobot": "dist/index.js"
+    "orchestra": "dist/index.js"
   },
   "files": [
     "dist",
@@ -20,7 +20,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sveMind/AutoBot.git"
+    "url": "git+https://github.com/sveMind/Orchestra.git"
   },
   "keywords": [
     "devops",
@@ -33,9 +33,9 @@
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/sveMind/AutoBot/issues"
+    "url": "https://github.com/sveMind/Orchestra/issues"
   },
-  "homepage": "https://github.com/sveMind/AutoBot#readme",
+  "homepage": "https://github.com/sveMind/Orchestra#readme",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@octokit/rest": "^19.0.13",

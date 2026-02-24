@@ -9,33 +9,33 @@ spec:
 
 ---
 
-.autobot_base:
+.orchestra_base:
   image: $[[ inputs.image ]]
   before_script:
-    - npm install -g autobot-svemind
+    - npm install -g orchestra-svemind
   variables:
     VCS_PROVIDER: gitlab
 
-autobot-auto:
-  extends: .autobot_base
+orchestra-auto:
+  extends: .orchestra_base
   stage: $[[ inputs.stage ]]
   script:
-    - autobot auto
+    - orchestra auto
   rules:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-autobot-vuln-scan:
-  extends: .autobot_base
+orchestra-vuln-scan:
+  extends: .orchestra_base
   stage: $[[ inputs.stage ]]
   script:
-    - autobot vuln-scan .
+    - orchestra vuln-scan .
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
-autobot-release-notes:
-  extends: .autobot_base
+orchestra-release-notes:
+  extends: .orchestra_base
   stage: deploy
   script:
-    - autobot release-notes $CI_COMMIT_TAG
+    - orchestra release-notes $CI_COMMIT_TAG
   rules:
     - if: $CI_COMMIT_TAG

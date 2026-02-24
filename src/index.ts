@@ -3,21 +3,21 @@ import { Command } from 'commander';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import { AutoBotPlugin } from './types';
+import { OrchestraPlugin } from './types';
 
 dotenv.config();
 
 const program = new Command();
 
 program
-  .name('autobot')
-  .description('AutoBot: Automated pipeline tasks with plugin architecture.')
+  .name('orchestra')
+  .description('Orchestra: Automated pipeline tasks with plugin architecture.')
   .version('1.0.0');
 
 // --- Server Command ---
 program
   .command('server')
-  .description('Start the AutoBot webhook server')
+  .description('Start the Orchestra webhook server')
   .action(() => {
     // Dynamic import to avoid loading server dependencies when using CLI
     require('./server');
@@ -50,7 +50,7 @@ const loadPlugins = async () => {
     try {
       // Dynamic import
       const pluginModule = await import(pluginPath);
-      const plugin: AutoBotPlugin = pluginModule.default;
+      const plugin: OrchestraPlugin = pluginModule.default;
 
         if (plugin && plugin.command) {
           const cmd = program.command(plugin.command)

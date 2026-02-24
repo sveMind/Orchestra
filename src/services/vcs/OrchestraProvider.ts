@@ -4,19 +4,19 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-export class AutoBotProvider implements VcsProvider {
+export class OrchestraProvider implements VcsProvider {
     private client: AxiosInstance;
     private token: string | undefined;
     private projectId: string | undefined;
     private baseUrl: string;
 
     constructor() {
-        this.token = process.env.AUTOBOT_TOKEN;
-        this.projectId = process.env.AUTOBOT_PROJECT_ID || 'default';
-        this.baseUrl = process.env.AUTOBOT_URL || 'https://autobot.swemind.com/api/v1';
+        this.token = process.env.ORCHESTRA_TOKEN;
+        this.projectId = process.env.ORCHESTRA_PROJECT_ID || 'default';
+        this.baseUrl = process.env.ORCHESTRA_URL || 'https://orchestra.swemind.com/api/v1';
 
         if (!this.token) {
-            console.warn('Warning: AUTOBOT_TOKEN is not set. AutoBot service features will not work.');
+            console.warn('Warning: ORCHESTRA_TOKEN is not set. Orchestra service features will not work.');
         }
 
         this.client = axios.create({
@@ -38,15 +38,15 @@ export class AutoBotProvider implements VcsProvider {
             const response = await this.client.get(`/projects/${this.projectId}`);
             return response.data.defaultBranch || 'main';
         } catch (error) {
-            console.error('Error fetching AutoBot default branch:', error);
+            console.error('Error fetching Orchestra default branch:', error);
             return 'main';
         }
     }
 
     async createIssue(title: string, body: string, labels: string[] = []): Promise<string | null> {
         if (!this.isConfigured()) {
-            console.log(`[MOCK AUTOBOT] Issue Created: ${title}`);
-            return 'https://autobot.swemind.com/mock/issue/123';
+            console.log(`[MOCK ORCHESTRA] Issue Created: ${title}`);
+            return 'https://orchestra.swemind.com/mock/issue/123';
         }
         try {
             const response = await this.client.post(`/projects/${this.projectId}/issues`, {
@@ -56,15 +56,15 @@ export class AutoBotProvider implements VcsProvider {
             });
             return response.data.url;
         } catch (error) {
-            console.error('Error creating AutoBot issue:', error);
+            console.error('Error creating Orchestra issue:', error);
             return null;
         }
     }
 
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
         if (!this.isConfigured()) {
-            console.log(`[MOCK AUTOBOT] PR Created: ${title} (${head} -> ${base})`);
-            return 'https://autobot.swemind.com/mock/pr/456';
+            console.log(`[MOCK ORCHESTRA] PR Created: ${title} (${head} -> ${base})`);
+            return 'https://orchestra.swemind.com/mock/pr/456';
         }
         try {
             const response = await this.client.post(`/projects/${this.projectId}/pull-requests`, {
@@ -75,15 +75,15 @@ export class AutoBotProvider implements VcsProvider {
             });
             return response.data.url;
         } catch (error) {
-            console.error('Error creating AutoBot PR:', error);
+            console.error('Error creating Orchestra PR:', error);
             return null;
         }
     }
 
     async addComment(issueNumber: number, body: string): Promise<string | null> {
         if (!this.isConfigured()) {
-            console.log(`[MOCK AUTOBOT] Comment added to #${issueNumber}: ${body.substring(0, 50)}...`);
-            return 'https://autobot.swemind.com/mock/issue/123#comment';
+            console.log(`[MOCK ORCHESTRA] Comment added to #${issueNumber}: ${body.substring(0, 50)}...`);
+            return 'https://orchestra.swemind.com/mock/issue/123#comment';
         }
         try {
             const response = await this.client.post(`/projects/${this.projectId}/issues/${issueNumber}/comments`, {
@@ -91,14 +91,14 @@ export class AutoBotProvider implements VcsProvider {
             });
             return response.data.url;
         } catch (error) {
-            console.error('Error adding AutoBot comment:', error);
+            console.error('Error adding Orchestra comment:', error);
             return null;
         }
     }
 
     async addLabels(issueNumber: number, labels: string[]): Promise<void> {
         if (!this.isConfigured()) {
-            console.log(`[MOCK AUTOBOT] Added labels to #${issueNumber}: ${labels.join(', ')}`);
+            console.log(`[MOCK ORCHESTRA] Added labels to #${issueNumber}: ${labels.join(', ')}`);
             return;
         }
         try {
@@ -106,7 +106,7 @@ export class AutoBotProvider implements VcsProvider {
                 labels,
             });
         } catch (error) {
-            console.error('Error adding AutoBot labels:', error);
+            console.error('Error adding Orchestra labels:', error);
         }
     }
 
@@ -118,15 +118,15 @@ export class AutoBotProvider implements VcsProvider {
             const response = await this.client.get(`/projects/${this.projectId}/pull-requests/${pullNumber}/diff`);
             return response.data.diff;
         } catch (error) {
-            console.error('Error fetching AutoBot PR diff:', error);
+            console.error('Error fetching Orchestra PR diff:', error);
             return null;
         }
     }
 
     async createRelease(tagName: string, name: string, body: string): Promise<string | null> {
         if (!this.isConfigured()) {
-            console.log(`[MOCK AUTOBOT] Release Created: ${name} (${tagName})`);
-            return 'https://autobot.swemind.com/mock/release/v1.0.0';
+            console.log(`[MOCK ORCHESTRA] Release Created: ${name} (${tagName})`);
+            return 'https://orchestra.swemind.com/mock/release/v1.0.0';
         }
         try {
             const response = await this.client.post(`/projects/${this.projectId}/releases`, {
@@ -136,7 +136,7 @@ export class AutoBotProvider implements VcsProvider {
             });
             return response.data.url;
         } catch (error) {
-            console.error('Error creating AutoBot release:', error);
+            console.error('Error creating Orchestra release:', error);
             return null;
         }
     }

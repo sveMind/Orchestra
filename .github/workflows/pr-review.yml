@@ -1,4 +1,4 @@
-name: AutoBot PR Review
+name: Orchestra PR Review
 
 on:
   pull_request:
@@ -24,7 +24,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Run AutoBot PR Review
+      - name: Run Orchestra PR Review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

@@ -1,4 +1,4 @@
-import { AutoBotPlugin } from '../../types';
+import { OrchestraPlugin } from '../../types';
 import fs from 'fs';
 import path from 'path';
 import { consultAgent, AgentRole } from '../../services/agentService';
@@ -110,18 +110,18 @@ Do not include explanations or markdown formatting.`;
 ${analysis}
 
 ## Applied Fix
-The following changes were applied automatically by AutoBot:
+The following changes were applied automatically by Orchestra:
 
 
 ${fixedCode || fixSuggestion}
 
 
-*Reported by AutoBot Security Agent*
+*Reported by Orchestra Security Agent*
     `;
 
     console.log('\nCreating Issue...');
     const vcs = VcsFactory.getProvider();
-    const issueUrl = await vcs.createIssue(issueTitle, issueBody, ['security', 'autobot', 'auto-fixed']);
+    const issueUrl = await vcs.createIssue(issueTitle, issueBody, ['security', 'orchestra', 'auto-fixed']);
     
     if (issueUrl) {
         console.log(`Issue created successfully: ${issueUrl}`);
@@ -141,7 +141,7 @@ ${fixedCode || fixSuggestion}
                     `Security Fix: ${fileName}`,
                     branchName,
                     'main', // Assuming main is the base branch
-                    `Fixes ${issueUrl}\n\nAutomated security fix applied by AutoBot.`
+                    `Fixes ${issueUrl}\n\nAutomated security fix applied by Orchestra.`
                 );
                 
                 if (prUrl) {
@@ -163,7 +163,7 @@ ${fixedCode || fixSuggestion}
   }
 };
 
-const plugin: AutoBotPlugin = {
+const plugin: OrchestraPlugin = {
   name: 'Vulnerability Scanner',
   description: 'Scan for vulnerabilities using AI and apply fixes',
   command: 'vuln-scan',

@@ -1,8 +1,8 @@
-# AutoBot with GitHub Actions
+# Orchestra with GitHub Actions
 
-This guide explains how to integrate AutoBot agents into your GitHub Actions workflows.
+This guide explains how to integrate Orchestra agents into your GitHub Actions workflows.
 
-You can use the official `sveMind/AutoBot` action to simplify your workflow configuration.
+You can use the official `sveMind/Orchestra` action to simplify your workflow configuration.
 
 ## Prerequisites
 
@@ -14,10 +14,10 @@ Set the following secrets in your repository (`Settings > Secrets and variables 
 ## Examples
 
 ### 1. Automated PR Reviewer
-Trigger AutoBot to review every Pull Request.
+Trigger Orchestra to review every Pull Request.
 
 ```yaml
-name: AutoBot PR Reviewer
+name: Orchestra PR Reviewer
 
 on:
   pull_request:
@@ -33,8 +33,8 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Run AutoBot PR Review
-        uses: sveMind/AutoBot@v1
+      - name: Run Orchestra PR Review
+        uses: sveMind/Orchestra@v1
         with:
           command: pr-review
           arguments: ${{ github.event.pull_request.number }}
@@ -49,7 +49,7 @@ jobs:
 Analyze changes on every push and run tests/security scans automatically.
 
 ```yaml
-name: AutoBot Auto-Pilot
+name: Orchestra Auto-Pilot
 
 on:
   push:
@@ -70,11 +70,11 @@ jobs:
 
       - name: Configure Git Identity
         run: |
-          git config --global user.name "AutoBot"
-          git config --global user.email "autobot@example.com"
+          git config --global user.name "Orchestra"
+          git config --global user.email "orchestra@example.com"
 
       - name: Run Auto-Pilot
-        uses: sveMind/AutoBot@v1
+        uses: sveMind/Orchestra@v1
         with:
           command: auto
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
@@ -87,7 +87,7 @@ jobs:
 Generate release notes when a new tag is pushed.
 
 ```yaml
-name: AutoBot Release Notes
+name: Orchestra Release Notes
 
 on:
   push:
@@ -106,7 +106,7 @@ jobs:
           fetch-depth: 0
 
       - name: Generate Release Notes
-        uses: sveMind/AutoBot@v1
+        uses: sveMind/Orchestra@v1
         with:
           command: release-notes
           arguments: ${{ github.ref_name }}
@@ -115,10 +115,10 @@ jobs:
 ```
 
 ### 4. Agile Workflow Trigger
-Trigger the full Agile workflow when an issue is labeled with `autobot`.
+Trigger the full Agile workflow when an issue is labeled with `orchestra`.
 
 ```yaml
-name: AutoBot Agile Workflow
+name: Orchestra Agile Workflow
 
 on:
   issues:
@@ -126,7 +126,7 @@ on:
 
 jobs:
   agile_workflow:
-    if: github.event.label.name == 'autobot'
+    if: github.event.label.name == 'orchestra'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -138,11 +138,11 @@ jobs:
 
       - name: Configure Git Identity
         run: |
-          git config --global user.name "AutoBot"
-          git config --global user.email "autobot@example.com"
+          git config --global user.name "Orchestra"
+          git config --global user.email "orchestra@example.com"
 
       - name: Run Agile Workflow
-        uses: sveMind/AutoBot@v1
+        uses: sveMind/Orchestra@v1
         with:
           command: agile
           arguments: ${{ github.event.issue.number }} "${{ github.event.issue.title }}"

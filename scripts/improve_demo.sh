@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# AutoBot Improvement Pipeline Demo
-# This script demonstrates how AutoBot iteratively improves a project.
+# Orchestra Improvement Pipeline Demo
+# This script demonstrates how Orchestra iteratively improves a project.
 
-echo "🚀 Starting AutoBot Improvement Pipeline..."
+echo "🚀 Starting Orchestra Improvement Pipeline..."
 echo "=========================================="
 
 TARGET_FILE="examples/mock-website/src/cart.ts"

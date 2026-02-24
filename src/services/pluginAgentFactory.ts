@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { AutoBotPlugin } from '../types';
+import { OrchestraPlugin } from '../types';
 import { consultAgent, AgentRole } from './agentService';
 import { extractCodeBlock } from '../utils/codeExtractor';
 
@@ -25,7 +25,7 @@ export type FileAgentPluginConfig = {
     }) => Promise<void> | void;
 };
 
-export const createFileAgentPlugin = (config: FileAgentPluginConfig): AutoBotPlugin => {
+export const createFileAgentPlugin = (config: FileAgentPluginConfig): OrchestraPlugin => {
     return {
         name: config.name,
         description: config.description,

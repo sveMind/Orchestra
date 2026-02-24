@@ -1,4 +1,4 @@
-import { AutoBotPlugin } from '../../types';
+import { OrchestraPlugin } from '../../types';
 import { AgentRole } from '../../services/agentService';
 import { createFileAgentPlugin } from '../../services/pluginAgentFactory';
 import fs from 'fs';
@@ -8,7 +8,7 @@ export const generateTests = async (filePath: string): Promise<void> => {
     await plugin.action(filePath);
 };
 
-const plugin: AutoBotPlugin = createFileAgentPlugin({
+const plugin: OrchestraPlugin = createFileAgentPlugin({
     name: 'Test Generator',
     description: 'Generate unit tests for a file',
     command: 'test-gen',

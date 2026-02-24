@@ -84,7 +84,7 @@ const slugifyBranchPart = (input: string): string => {
 };
 
 export const buildBranchName = (kind: string, context?: string): string => {
-    const parts: string[] = ['autobot', kind];
+    const parts: string[] = ['orchestra', kind];
     if (context) {
         const slug = slugifyBranchPart(context);
         if (slug) {

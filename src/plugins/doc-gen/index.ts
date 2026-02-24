@@ -1,4 +1,4 @@
-import { AutoBotPlugin } from '../../types';
+import { OrchestraPlugin } from '../../types';
 import { AgentRole } from '../../services/agentService';
 import { createFileAgentPlugin } from '../../services/pluginAgentFactory';
 
@@ -6,7 +6,7 @@ export const generateDocumentation = async (filePath: string): Promise<void> => 
   await plugin.action(filePath);
 };
 
-const plugin: AutoBotPlugin = createFileAgentPlugin({
+const plugin: OrchestraPlugin = createFileAgentPlugin({
   name: 'Documentation Generator',
   description: 'Generate or improve documentation using a Technical Writer agent',
   command: 'doc-gen',

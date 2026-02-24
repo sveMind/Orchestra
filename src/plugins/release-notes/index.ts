@@ -1,4 +1,4 @@
-import { AutoBotPlugin } from '../../types';
+import { OrchestraPlugin } from '../../types';
 import { generateCompletion } from '../../services/aiService';
 import { getCommitsSince, getLatestTag, getPreviousTag } from '../../services/gitService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
@@ -79,7 +79,7 @@ export const generateReleaseNotes = async (version: string): Promise<void> => {
   }
 };
 
-const plugin: AutoBotPlugin = {
+const plugin: OrchestraPlugin = {
   name: 'Release Notes Generator',
   description: 'Generate release notes based on git commits since the last tag',
   command: 'release-notes',

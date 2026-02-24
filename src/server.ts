@@ -38,7 +38,7 @@ app.post('/webhook', async (req, res) => {
             console.log(`Cloning ${repoUrl} to ${workspaceDir}...`);
             await cloneRepo(repoUrl, workspaceDir);
             
-            // Set context for AutoBot
+            // Set context for Orchestra
             setWorkingDirectory(workspaceDir);
             
             // Hack: Temporarily change process.cwd() so plugins find files relative to workspace
@@ -92,6 +92,6 @@ app.post('/webhook', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 AutoBot Server listening on port ${PORT}`);
+    console.log(`🚀 Orchestra Server listening on port ${PORT}`);
     console.log(`Webhook URL: http://localhost:${PORT}/webhook`);
 });

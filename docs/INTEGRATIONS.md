@@ -1,10 +1,10 @@
-# AutoBot Integrations Guide
+# Orchestra Integrations Guide
 
-AutoBot is designed to be platform-agnostic, supporting multiple Version Control Systems (VCS) and Issue Tracking systems. This guide explains how to configure AutoBot to work with your preferred tools.
+Orchestra is designed to be platform-agnostic, supporting multiple Version Control Systems (VCS) and Issue Tracking systems. This guide explains how to configure Orchestra to work with your preferred tools.
 
 ## 🚀 Quick Start
 
-AutoBot uses environment variables to determine which services to connect to. You can mix and match providers (e.g., Jira for issues, GitHub for code).
+Orchestra uses environment variables to determine which services to connect to. You can mix and match providers (e.g., Jira for issues, GitHub for code).
 
 ### Common Scenarios
 
@@ -69,7 +69,7 @@ Supports Azure DevOps Services.
     *   `AZURE_REPO`: Repository name (or ID).
 
 ### 4. Jira (Issue Tracking Only)
-Can be used in combination with any VCS provider. When enabled, AutoBot will create issues and comments in Jira instead of your VCS.
+Can be used in combination with any VCS provider. When enabled, Orchestra will create issues and comments in Jira instead of your VCS.
 *   **Env Var**: `ISSUE_PROVIDER=jira`
 *   **Required Variables**:
     *   `JIRA_HOST`: Your Jira Cloud domain (e.g., `mycompany.atlassian.net`).
@@ -77,18 +77,18 @@ Can be used in combination with any VCS provider. When enabled, AutoBot will cre
     *   `JIRA_API_TOKEN`: An API token generated from Atlassian Account settings.
     *   `JIRA_PROJECT_KEY`: The key of the Jira project to create issues in (e.g., `PROJ`).
 
-### 5. AutoBot Service
+### 5. Orchestra Service
 Our native hosted service for managing tasks and code.
-*   **Env Var**: `VCS_PROVIDER=autobot` (or automatically detected if `AUTOBOT_TOKEN` is set and no other provider is specified).
+*   **Env Var**: `VCS_PROVIDER=orchestra` (or automatically detected if `ORCHESTRA_TOKEN` is set and no other provider is specified).
 *   **Required Variables**:
-    *   `AUTOBOT_TOKEN`: Your AutoBot API token.
-    *   `AUTOBOT_PROJECT_ID`: Your project ID.
+    *   `ORCHESTRA_TOKEN`: Your Orchestra API token.
+    *   `ORCHESTRA_PROJECT_ID`: Your project ID.
 
 ---
 
 ## 🧩 Plugin Support
 
-AutoBot's internal plugins (like `agile-workflow`, `dev-cycle`) automatically use the configured providers.
+Orchestra's internal plugins (like `agile-workflow`, `dev-cycle`) automatically use the configured providers.
 
 *   **Agile Workflow**: Will create stories/tasks in Jira (if configured) or GitHub/GitLab Issues.
 *   **Dev Cycle**: Will check PRs on GitHub/GitLab/Azure and link them to issues in Jira/GitHub/GitLab.

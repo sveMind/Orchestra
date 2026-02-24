@@ -2,7 +2,7 @@ import { VcsProvider, IssueProvider, CodeProvider } from './VcsProvider';
 import { GitHubProvider } from './GitHubProvider';
 import { GitLabProvider } from './GitLabProvider';
 import { AzureDevOpsProvider } from './AzureDevOpsProvider';
-import { AutoBotProvider } from './AutoBotProvider';
+import { OrchestraProvider } from './OrchestraProvider';
 import { JiraProvider } from './JiraProvider';
 import dotenv from 'dotenv';
 
@@ -46,17 +46,17 @@ export class VcsFactory {
         // 1. Determine Code Provider (VCS)
         let vcsType = process.env.VCS_PROVIDER;
         
-        // Auto-detect AutoBot service if token is present and no other provider is explicitly set
-        if (!vcsType && process.env.AUTOBOT_TOKEN) {
-            vcsType = 'autobot';
+        // Auto-detect Orchestra service if token is present and no other provider is explicitly set
+        if (!vcsType && process.env.ORCHESTRA_TOKEN) {
+            vcsType = 'orchestra';
         }
         vcsType = vcsType || 'github';
 
         let codeProvider: VcsProvider; // VcsProvider implements CodeProvider
         switch (vcsType.toLowerCase()) {
-            case 'autobot':
-                console.log('🔌 Using AutoBot Service Provider (VCS)');
-                codeProvider = new AutoBotProvider();
+            case 'orchestra':
+                console.log('🔌 Using Orchestra Service Provider (VCS)');
+                codeProvider = new OrchestraProvider();
                 break;
             case 'gitlab':
                 console.log('🔌 Using GitLab Provider');

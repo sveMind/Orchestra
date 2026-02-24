@@ -1,4 +1,4 @@
-name: AutoBot Issue Handlers
+name: Orchestra Issue Handlers
 
 on:
   issues:
@@ -12,8 +12,8 @@ permissions:
 jobs:
   agile-workflow:
     if: |
-      (github.event.action == 'labeled' && (github.event.label.name == 'autobot' || github.event.label.name == 'autobot-task')) ||
-      (github.event.action == 'opened' && (contains(github.event.issue.labels.*.name, 'autobot') || contains(github.event.issue.labels.*.name, 'autobot-task')))
+      (github.event.action == 'labeled' && (github.event.label.name == 'orchestra' || github.event.label.name == 'orchestra-task')) ||
+      (github.event.action == 'opened' && (contains(github.event.issue.labels.*.name, 'orchestra') || contains(github.event.issue.labels.*.name, 'orchestra-task')))
     runs-on: ubuntu-latest
     environment: OPENAI_API_KEY
     steps:
@@ -33,7 +33,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Run AutoBot Agile Workflow
+      - name: Run Orchestra Agile Workflow
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_OWNER: ${{ github.repository_owner }}

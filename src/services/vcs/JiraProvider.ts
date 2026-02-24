@@ -81,7 +81,7 @@ export class JiraProvider implements IssueProvider {
         // Note: Jira uses string keys (PROJECT-123), but interface expects number.
         // We will assume issueNumber is the ID part if purely numeric, or we might need to change interface.
         // For now, assuming standard numeric ID part isn't enough for Jira key "PROJ-123".
-        // Limitation: AutoBot currently assumes integer issue IDs (GitHub/GitLab style).
+        // Limitation: Orchestra currently assumes integer issue IDs (GitHub/GitLab style).
         // Workaround: We'll construct the key using the project key.
         
         const issueKey = `${this.projectKey}-${issueNumber}`;

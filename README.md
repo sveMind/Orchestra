@@ -1,17 +1,17 @@
-# 🤖 AutoBot
+# 🤖 Orchestra
 
-**AutoBot** is an advanced, AI-driven DevOps assistant designed to automate your software development lifecycle. Built with a modular plugin architecture and powered by a multi-agent AI system, AutoBot acts as your virtual team of experts—handling everything from project planning to quality assurance.
+**Orchestra** is an advanced, AI-driven DevOps assistant designed to automate your software development lifecycle. Built with a modular plugin architecture and powered by a multi-agent AI system, Orchestra acts as your virtual team of experts—handling everything from project planning to quality assurance.
 
 ## 🚀 Key Features
 
 ### 🧠 Intelligent Auto-Pilot
-The flagship feature of AutoBot. It monitors your workspace for changes and dynamically orchestrates the right agents to handle them.
+The flagship feature of Orchestra. It monitors your workspace for changes and dynamically orchestrates the right agents to handle them.
 - **Context-Aware**: Analyzes git diffs to understand *what* changed (logic vs. docs vs. config).
 - **Dynamic Pipelines**: Automatically triggers Unit Tests, Security Scans, or Documentation updates based on the nature of the change.
 - **Zero Config**: Just run it, and it figures out what needs to be done.
 
 ### 👥 Multi-Agent Collaboration
-AutoBot simulates a real agile team using specialized AI personas:
+Orchestra simulates a real agile team using specialized AI personas:
 - **Software Architect**: Analyzes code structure and determines pipeline strategies.
 - **QA Automation Engineer**: Writes robust unit and integration tests (Jest, etc.).
 - **Security Engineer**: Scans code for vulnerabilities and suggests secure fixes.
@@ -21,7 +21,7 @@ AutoBot simulates a real agile team using specialized AI personas:
 - **UX Designer**: Provides usability guidelines for frontend tasks.
 
 ### 🔌 Modular Plugin System
-AutoBot is built on a flexible plugin architecture, allowing for easy extension. Current plugins include:
+Orchestra is built on a flexible plugin architecture, allowing for easy extension. Current plugins include:
 - **`test-gen`**: Generates unit tests for specific files.
 - **`vuln-scan`**: Performs AI-based security analysis and auto-patching.
 - **`project-manager`**: Simulates an agile sprint planning session from a simple prompt.
@@ -34,24 +34,24 @@ AutoBot is built on a flexible plugin architecture, allowing for easy extension.
 
 ### Option 1: NPM Package (Recommended)
 
-You can install AutoBot globally to use it across any project:
+You can install Orchestra globally to use it across any project:
 
 ```bash
-npm install -g autobot
+npm install -g orchestra
 ```
 
 Or run it directly with `npx`:
 
 ```bash
-npx autobot --help
+npx orchestra --help
 ```
 
 ### Option 2: Source Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-repo/AutoBot.git
-   cd AutoBot
+   git clone https://github.com/your-repo/Orchestra.git
+   cd Orchestra
    ```
 
 2. **Install dependencies:**
@@ -71,7 +71,7 @@ npx autobot --help
 
 ### Configuration
 
-Create a `.env` file in the root directory (or where you run AutoBot):
+Create a `.env` file in the root directory (or where you run Orchestra):
 
 ```env
 # Default: OpenAI
@@ -90,9 +90,9 @@ GITHUB_TOKEN=your-github-token (Optional, for Issue creation)
 ## 💻 Usage
 
 ### 1. Auto-Pilot Mode (Recommended)
-Let AutoBot decide what to do based on your current work.
+Let Orchestra decide what to do based on your current work.
 ```bash
-autobot auto
+orchestra auto
 # OR
 npm start -- auto
 ```
@@ -100,40 +100,40 @@ npm start -- auto
 ### 2. Project Management Simulation
 Have the AI team breakdown a new feature idea into actionable tasks and GitHub Issues.
 ```bash
-autobot project-manager "Build a new user dashboard with dark mode"
+orchestra project-manager "Build a new user dashboard with dark mode"
 # OR
-autobot project-manager ./requirements.md
+orchestra project-manager ./requirements.md
 ```
 
 ### 3. Vulnerability Scanning
 Scan a specific file for security flaws and get auto-generated fix suggestions.
 ```bash
-autobot vuln-scan src/services/auth.ts
+orchestra vuln-scan src/services/auth.ts
 ```
 
 ### 4. Unit Test Generation
 Manually trigger test generation for a file.
 ```bash
-autobot test-gen src/utils/math.ts
+orchestra test-gen src/utils/math.ts
 ```
 
 ### 5. Documentation Generation
 Improve existing docs or generate new API references.
 ```bash
-autobot doc-gen src/services/api.ts
+orchestra doc-gen src/services/api.ts
 ```
 
 ### 6. Release Notes
 Generate release notes based on git tags and commits.
 ```bash
-autobot release-notes v1.2.0
+orchestra release-notes v1.2.0
 ```
 
 ---
 
 ## 🌍 Deployment Options
 
-AutoBot can be easily integrated into your CI/CD pipelines.
+Orchestra can be easily integrated into your CI/CD pipelines.
 
 ### 📚 Integration Guides
 *   **[Pipeline Overview](docs/PIPELINES.md)** - Learn about available agents and commands.
@@ -143,31 +143,31 @@ AutoBot can be easily integrated into your CI/CD pipelines.
 
 ### Quick Example: GitHub Action
 ```yaml
-name: AutoBot Auto-Pilot
+name: Orchestra Auto-Pilot
 on: [push]
 jobs:
-  autobot:
+  orchestra:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-      - run: npx autobot-svemind auto
+      - run: npx orchestra-svemind auto
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ### Webhook Server
-Run AutoBot as a standalone server that listens for GitHub Webhooks.
+Run Orchestra as a standalone server that listens for GitHub Webhooks.
 ```bash
-autobot server
+orchestra server
 ```
 
 ---
 
 ## 🏗️ Architecture
 
-AutoBot uses a **Plugin-based Architecture** where each capability is a standalone module in `src/plugins`. The core system handles:
+Orchestra uses a **Plugin-based Architecture** where each capability is a standalone module in `src/plugins`. The core system handles:
 - **CLI Parsing** (Commander)
 - **Plugin Loading** (Dynamic Imports)
 - **Agent Service** (OpenAI Integration & Persona Management)

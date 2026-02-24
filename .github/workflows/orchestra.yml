@@ -1,4 +1,4 @@
-name: AutoBot Pipeline
+name: Orchestra Pipeline
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  autobot:
+  orchestra:
     runs-on: ubuntu-latest
     environment: OPENAI_API_KEY
     steps:
@@ -31,7 +31,7 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Run AutoBot Auto-Pilot
+      - name: Run Orchestra Auto-Pilot
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AI_BASE_URL: ${{ secrets.AI_BASE_URL }}

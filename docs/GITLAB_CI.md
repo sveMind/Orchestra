@@ -1,8 +1,8 @@
-# AutoBot with GitLab CI/CD
+# Orchestra with GitLab CI/CD
 
-This guide explains how to integrate AutoBot agents into your GitLab CI pipelines.
+This guide explains how to integrate Orchestra agents into your GitLab CI pipelines.
 
-You can use the official `sveMind/AutoBot` CI templates to simplify your configuration.
+You can use the official `sveMind/Orchestra` CI templates to simplify your configuration.
 
 ## Prerequisites
 
@@ -16,39 +16,39 @@ Set the following variables in `Settings > CI/CD > Variables`:
 
 ### Method 1: Using the CI Template (Recommended)
 
-You can include the official AutoBot template in your `.gitlab-ci.yml`. This provides pre-configured jobs that you can extend or use directly.
+You can include the official Orchestra template in your `.gitlab-ci.yml`. This provides pre-configured jobs that you can extend or use directly.
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/sveMind/AutoBot/main/templates/gitlab-ci.yml'
+  - remote: 'https://raw.githubusercontent.com/sveMind/Orchestra/main/templates/gitlab-ci.yml'
 
 stages:
   - test
   - deploy
 
 # 1. Auto-Pilot (Runs on Push)
-autobot-auto:
-  extends: .autobot_base
+orchestra-auto:
+  extends: .orchestra_base
   stage: test
   script:
     # Optional: Configure git identity if needed for commits
-    - git config --global user.email "autobot@example.com"
-    - git config --global user.name "AutoBot"
+    - git config --global user.email "orchestra@example.com"
+    - git config --global user.name "Orchestra"
     - git fetch --unshallow || true
-    - autobot auto
+    - orchestra auto
   rules:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # 2. Vulnerability Scanner (Runs on Merge Requests)
-autobot-vuln-scan:
-  extends: .autobot_base
+orchestra-vuln-scan:
+  extends: .orchestra_base
   stage: test
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # 3. Release Notes (Runs on Tag)
-autobot-release-notes:
-  extends: .autobot_base
+orchestra-release-notes:
+  extends: .orchestra_base
   stage: deploy
   rules:
     - if: $CI_COMMIT_TAG
@@ -70,11 +70,11 @@ auto_pilot:
   variables:
     VCS_PROVIDER: "gitlab"
   script:
-    - npm install -g autobot-svemind
-    - git config --global user.email "autobot@example.com"
-    - git config --global user.name "AutoBot"
+    - npm install -g orchestra-svemind
+    - git config --global user.email "orchestra@example.com"
+    - git config --global user.name "Orchestra"
     - git fetch --unshallow || true 
-    - autobot auto
+    - orchestra auto
 ```
 
 ### 4. Agile Workflow (Triggered via API or Manual)
@@ -90,10 +90,10 @@ agile_workflow:
     ISSUE_TITLE: ""
     VCS_PROVIDER: "gitlab"
   script:
-    - npm install -g autobot-svemind
-    - git config --global user.email "autobot@example.com"
-    - git config --global user.name "AutoBot"
-    - autobot agile $ISSUE_ID "$ISSUE_TITLE"
+    - npm install -g orchestra-svemind
+    - git config --global user.email "orchestra@example.com"
+    - git config --global user.name "Orchestra"
+    - orchestra agile $ISSUE_ID "$ISSUE_TITLE"
 ```
 
 ---
