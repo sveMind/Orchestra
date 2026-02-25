@@ -87,6 +87,47 @@ export class AzureDevOpsProvider implements VcsProvider {
             return null;
         }
     }
+    
+    async listIssues(state: 'open' | 'closed' | 'all' = 'open'): Promise<{ number: number; title: string; state: string }[]> {
+         if (!this.isConfigured()) {
+             return [
+                 { number: 1, title: 'Mock Issue 1', state: 'open' },
+                 { number: 2, title: 'Mock Issue 2', state: 'closed' }
+             ];
+         }
+         await this.init();
+         try {
+             let whereClause = "[System.TeamProject] = @project AND [System.WorkItemType] = 'Task'";
+             
+             if (state === 'open') {
+                 whereClause += " AND [System.State] NOT IN ('Closed', 'Done', 'Removed', 'Cut')";
+             } else if (state === 'closed') {
+                 whereClause += " AND [System.State] IN ('Closed', 'Done', 'Removed', 'Cut')";
+             }
+             
+             const wiql = `SELECT [System.Id], [System.Title], [System.State] FROM WorkItems WHERE ${whereClause}`;
+             
+             const result = await this.workItemApi?.queryByWiql({ query: wiql }, { project: this.project });
+             
+             if (!result?.workItems || result.workItems.length === 0) {
+                 return [];
+             }
+             
+             const ids = result.workItems.map(wi => wi.id).filter((id): id is number => id !== undefined);
+             if (ids.length === 0) return [];
+
+             const workItems = await this.workItemApi?.getWorkItems(ids, ['System.Id', 'System.Title', 'System.State']);
+             
+             return (workItems || []).map(wi => ({
+                 number: wi.id!,
+                 title: wi.fields?.['System.Title'] || 'No Title',
+                 state: wi.fields?.['System.State'] || 'Unknown'
+             }));
+         } catch (error) {
+             console.error('Error listing Azure Work Items:', error);
+             return [];
+         }
+    }
 
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
         if (!this.isConfigured()) {
@@ -160,6 +201,27 @@ export class AzureDevOpsProvider implements VcsProvider {
     async getPullRequestDiff(pullNumber: number): Promise<string | null> {
         // Azure API for diffs is complex (commit based). Returning mock or simplified.
         return 'Azure DevOps diff retrieval not fully implemented in this version.';
+    }
+
+    async mergePullRequest(pullNumber: number): Promise<boolean> {
+        if (!this.isConfigured()) {
+            console.log(`[MOCK AZURE] Merged PR #${pullNumber}`);
+            return true;
+        }
+        await this.init();
+        try {
+            // Status 3 is Completed
+            await this.gitApi?.updatePullRequest(
+                { status: 3 as any }, 
+                this.repoId!, 
+                pullNumber,
+                this.project
+            );
+            return true;
+        } catch (error) {
+            console.error('Error merging Azure PR:', error);
+            return false;
+        }
     }
 
     async createRelease(tagName: string, name: string, body: string): Promise<string | null> {

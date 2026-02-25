@@ -35,6 +35,44 @@ const detectPlatforms = (rootDir: string): { github: boolean; gitlab: boolean } 
   return { github, gitlab };
 };
 
+const continuousWorkflowContent = `name: Orchestra Continuous Loop
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 * * * *' # Run every hour
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  orchestra-continuous:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - run: npm ci
+      - run: npm run build
+      
+      - name: Run Orchestra Continuous Mode
+        env:
+          VCS_PROVIDER: github
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
+        run: node dist/index.js continuous ./README.md
+`;
+
 const githubWorkflowContent = `name: Orchestra
 
 on:
@@ -141,6 +179,15 @@ const initPipelines = async (): Promise<void> => {
     } else {
       fs.writeFileSync(workflowPath, githubWorkflowContent);
       console.log(`Created GitHub Actions workflow at ${workflowPath}`);
+    }
+
+    // Create Continuous Loop Workflow
+    const continuousWorkflowPath = path.join(workflowsDir, 'orchestra-continuous-loop.yml');
+    if (fs.existsSync(continuousWorkflowPath)) {
+      console.log(`Continuous Loop workflow already exists at ${continuousWorkflowPath}. Skipping creation.`);
+    } else {
+      fs.writeFileSync(continuousWorkflowPath, continuousWorkflowContent);
+      console.log(`Created Continuous Loop workflow at ${continuousWorkflowPath}`);
     }
   }
 

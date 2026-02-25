@@ -36,8 +36,8 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
         // Step 1: Software Engineer (Developer)
         console.log(`👨‍💻 Developer is working...`);
         const devPrompt = iteration === 1 
-            ? `Task: ${task}\n\nExisting Code:\n${currentCode || '(New File)'}\n\nImplement the requested feature/fix. Return the FULL file content.`
-            : `Task: ${task}\n\nCurrent Code:\n${currentCode}\n\nQA Feedback:\n${qaFeedback}\n\nFix the issues identified by QA. Return the FULL file content.`;
+            ? `Task: ${task}\n\nExisting Code:\n${currentCode || '(New File)'}\n\nImplement the requested feature/fix. Return the FULL file content.\n\nIf you encounter any technical debt or separate tasks that should be tracked, append them at the end of your response in this format:\n\n===ISSUE===\nTitle: <Issue Title>\nDescription: <Issue Description>\n===END ISSUE===`
+            : `Task: ${task}\n\nCurrent Code:\n${currentCode}\n\nFeedback:\n${qaFeedback}\n\nFix the issues identified by QA and Integration agents. Return the FULL file content.`;
 
         const codeSize = currentCode.length;
         let devAgentsCount = 1;
@@ -51,6 +51,24 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
 
         if (devAgentsCount === 1) {
             const devResponse = await consultAgent(AgentRole.SOFTWARE_ENGINEER, devPrompt, '');
+            
+            // Parse for Side Issues
+            const issueMatch = devResponse.match(/===ISSUE===([\s\S]*?)===END ISSUE===/);
+            if (issueMatch) {
+                const issueContent = issueMatch[1];
+                const titleMatch = issueContent.match(/Title:\s*(.*)/);
+                const descMatch = issueContent.match(/Description:\s*([\s\S]*)/);
+                
+                if (titleMatch && descMatch) {
+                    const newIssueTitle = titleMatch[1].trim();
+                    const newIssueDesc = descMatch[1].trim();
+                    console.log(`\n💡 Developer identified a new issue: "${newIssueTitle}"`);
+                    const vcs = VcsFactory.getProvider();
+                    const newIssueUrl = await vcs.createIssue(newIssueTitle, newIssueDesc, ['technical-debt', 'from-dev']);
+                    console.log(`   -> Created Issue: ${newIssueUrl}`);
+                }
+            }
+
             newCode = extractCodeBlock(devResponse) || devResponse;
         } else {
             console.log(`Spawning ${devAgentsCount} developer agents in parallel...`);
@@ -88,26 +106,50 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
         fs.writeFileSync(filePath, currentCode);
         console.log(`   -> Code updated.`);
 
-        // Step 2: QA Engineer (Tester)
-        console.log(`🕵️‍♀️ QA is reviewing...`);
-        const qaResponse = await consultAgent(
-            AgentRole.QA_ENGINEER,
-            `Review the following code implementation for the task: "${task}".
-            
+        // Step 2: QA & Integration Review (Parallel)
+        console.log(`🕵️‍♀️ QA and Integration Agents are reviewing in parallel...`);
+        
+        const [qaResponse, integrationResponse] = await Promise.all([
+            consultAgent(
+                AgentRole.QA_ENGINEER,
+                `Review the following code implementation for the task: "${task}".
+                
 Code:
 \`\`\`${codeLanguage}
 ${currentCode}
 \`\`\`
-            
+                
 1. Check for logical errors, edge cases, and bugs.
 2. If the code looks good and meets requirements, strictly say "APPROVED".
 3. If there are issues, list them clearly as bullet points for the developer to fix.
 `,
-            ''
-        );
+                ''
+            ),
+            consultAgent(
+                AgentRole.ARCHITECT,
+                `You are acting as the Integration Agent. Review the following code for seamless component interaction and architectural consistency.
 
-        if (qaResponse.includes('APPROVED')) {
-            console.log(`✅ QA Approved the changes.`);
+Code:
+\`\`\`${codeLanguage}
+${currentCode}
+\`\`\`
+
+Task: ${task}
+
+1. Does this code integrate well with the existing system (implied context)?
+2. Are there any breaking changes or interface mismatches?
+3. If it looks good, strictly say "APPROVED".
+4. If there are integration issues, list them clearly.
+`,
+                ''
+            )
+        ]);
+
+        const qaApproved = qaResponse.includes('APPROVED');
+        const integrationApproved = integrationResponse.includes('APPROVED');
+
+        if (qaApproved && integrationApproved) {
+            console.log(`✅ QA and Integration Agents Approved the changes.`);
             isApproved = true;
             
             console.log(`📝 Generating final Unit Tests...`);
@@ -160,9 +202,10 @@ ${currentCode}
             }
 
         } else {
-            console.log(`❌ QA found issues:`);
-            console.log(qaResponse);
-            qaFeedback = qaResponse;
+            console.log(`❌ QA/Integration found issues:`);
+            const feedback = `QA Feedback:\n${qaResponse}\n\nIntegration Feedback:\n${integrationResponse}`;
+            console.log(feedback);
+            qaFeedback = feedback;
             iteration++;
         }
     }

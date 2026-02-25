@@ -8,7 +8,8 @@ export enum AgentRole {
     ARCHITECT = 'Software Architect',
     SECURITY_ENGINEER = 'Security Engineer',
     QA_ENGINEER = 'QA Automation Engineer',
-    TECHNICAL_WRITER = 'Technical Writer'
+    TECHNICAL_WRITER = 'Technical Writer',
+    DEVOPS_ENGINEER = 'DevOps Engineer'
 }
 
 const ROLE_PROMPTS: Record<AgentRole, string> = {
@@ -19,8 +20,23 @@ const ROLE_PROMPTS: Record<AgentRole, string> = {
     [AgentRole.ARCHITECT]: 'You are a Software Architect. Focus on system design, scalability, patterns, and structural integrity. Summarize your architecture in brief, structured bullet points and stay at architecture level, avoiding low-level implementation decisions unless explicitly requested.',
     [AgentRole.SECURITY_ENGINEER]: 'You are a Security Engineer. Focus on vulnerability analysis, secure coding practices, and risk mitigation. Do not introduce new features or business logic outside the scope of the given context.',
     [AgentRole.QA_ENGINEER]: 'You are a QA Automation Engineer. Focus on writing comprehensive, robust, and maintainable unit and integration tests. Ensure high code coverage and edge case handling while only testing the behaviors described in the requirements and context.',
-    [AgentRole.TECHNICAL_WRITER]: 'You are an expert Technical Writer. Focus on clarity, conciseness, and accuracy. Create well-structured documentation, API guides, and READMEs that are easy to understand for the target audience. Do not invent non-existing features or APIs; document only what the context describes.'
+    [AgentRole.TECHNICAL_WRITER]: 'You are an expert Technical Writer. Focus on clarity, conciseness, and accuracy. Create well-structured documentation, API guides, and READMEs that are easy to understand for the target audience. Do not invent non-existing features or APIs; document only what the context describes.',
+    [AgentRole.DEVOPS_ENGINEER]: 'You are a DevOps Engineer. Focus on CI/CD pipelines, infrastructure as code (GitHub Actions, Docker, Kubernetes), and automation efficiency. Suggest and implement improvements to the build, test, and release processes. Ensure pipelines are robust, secure, and fast.'
 };
+
+export const AGENT_ICONS: Record<AgentRole, string> = {
+    [AgentRole.UX_DESIGNER]: '🎨',
+    [AgentRole.SOFTWARE_ENGINEER]: '👨‍💻',
+    [AgentRole.PRODUCT_MANAGER]: '👔',
+    [AgentRole.SCRUM_MASTER]: '🔄',
+    [AgentRole.ARCHITECT]: '🏗️',
+    [AgentRole.SECURITY_ENGINEER]: '🛡️',
+    [AgentRole.QA_ENGINEER]: '🧪',
+    [AgentRole.TECHNICAL_WRITER]: '📝',
+    [AgentRole.DEVOPS_ENGINEER]: '🔧'
+};
+
+export const getAgentIcon = (role: AgentRole): string => AGENT_ICONS[role] || '🤖';
 
 export const consultAgent = async (role: AgentRole, task: string, context: string = ''): Promise<string> => {
     console.log(`🤖 Consulting Agent: ${role}...`);

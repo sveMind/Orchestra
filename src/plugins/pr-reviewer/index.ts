@@ -16,8 +16,8 @@ export const runPRReview = async (pullNumber: number): Promise<void> => {
 
     const truncatedDiff = diff.substring(0, 3000);
 
-    console.log('🤖 Product Owner and Senior Developer are reviewing in parallel...');
-    const [poExchange, devExchange] = await runParallelAgents([
+    console.log('🤖 Product Owner, Senior Developer, and Security Engineer are reviewing in parallel...');
+    const [poExchange, devExchange, secExchange] = await runParallelAgents([
         {
             role: AgentRole.PRODUCT_MANAGER,
             task: `Review the following code changes (diff) and verify if they align with general product quality standards.
@@ -46,12 +46,27 @@ export const runPRReview = async (pullNumber: number): Promise<void> => {
             - Is it "APPROVED" or "CHANGES REQUESTED"?
             `,
             context: ''
+        },
+        {
+            role: AgentRole.SECURITY_ENGINEER,
+            task: `Review the following code changes (diff) for security vulnerabilities.
+            
+            Diff:
+            ${truncatedDiff}
+            
+            Output:
+            - Security Risk Assessment (Low/Medium/High)
+            - Vulnerabilities found
+            - Mitigation suggestions
+            - Is it "APPROVED" or "CHANGES REQUESTED"?
+            `,
+            context: ''
         }
     ]);
 
     const teamSummary = await runFacilitatedDiscussion(
         AgentRole.SCRUM_MASTER,
-        [poExchange, devExchange],
+        [poExchange, devExchange, secExchange],
         'Pull Request review and readiness decision'
     );
 
@@ -62,6 +77,9 @@ ${poExchange.message}
 
 #### 👨‍💻 Tech Review
 ${devExchange.message}
+
+#### 🛡️ Security Review
+${secExchange.message}
 
 #### 🧠 Team Summary
 ${teamSummary}

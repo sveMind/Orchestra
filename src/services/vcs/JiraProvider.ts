@@ -115,6 +115,45 @@ export class JiraProvider implements IssueProvider {
         }
     }
 
+    async listIssues(state: 'open' | 'closed' | 'all' = 'open'): Promise<{ number: number; title: string; state: string }[]> {
+        if (!this.isConfigured()) {
+            return [
+                { number: 1, title: 'Mock Jira Issue 1', state: 'To Do' },
+                { number: 2, title: 'Mock Jira Issue 2', state: 'Done' }
+            ];
+        }
+        try {
+            let jql = `project = ${this.projectKey}`;
+            
+            if (state === 'open') {
+                jql += ' AND statusCategory != Done';
+            } else if (state === 'closed') {
+                jql += ' AND statusCategory = Done';
+            }
+            
+            const response = await this.client.get(`/search`, {
+                params: {
+                    jql: jql,
+                    fields: 'summary,status',
+                    maxResults: 50
+                }
+            });
+            
+            return (response.data.issues || []).map((issue: any) => {
+                // Parse number from key (PROJECT-123 -> 123)
+                const numberPart = parseInt(issue.key.split('-')[1], 10) || 0;
+                return {
+                    number: numberPart,
+                    title: issue.fields.summary,
+                    state: issue.fields.status.name
+                };
+            });
+        } catch (error) {
+            console.error('Error listing Jira issues:', error);
+            return [];
+        }
+    }
+
     async addLabels(issueNumber: number, labels: string[]): Promise<void> {
         const issueKey = `${this.projectKey}-${issueNumber}`;
         if (!this.isConfigured()) {

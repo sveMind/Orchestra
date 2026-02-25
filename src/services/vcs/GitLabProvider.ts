@@ -60,6 +60,29 @@ export class GitLabProvider implements VcsProvider {
         }
     }
 
+    async listIssues(state: 'open' | 'closed' | 'all' = 'open'): Promise<{ number: number; title: string; state: string }[]> {
+        if (!this.isConfigured()) {
+            return [
+                { number: 1, title: 'Mock Issue 1', state: 'open' },
+                { number: 2, title: 'Mock Issue 2', state: 'closed' }
+            ];
+        }
+        try {
+            const gitlabState = state === 'all' ? 'all' : (state === 'open' ? 'opened' : 'closed');
+            const response = await this.client.get(`/projects/${this.projectId}/issues`, {
+                params: { state: gitlabState }
+            });
+            return response.data.map((issue: any) => ({
+                number: issue.iid,
+                title: issue.title,
+                state: issue.state // opened, closed
+            }));
+        } catch (error) {
+            console.error('Error listing GitLab issues:', error);
+            return [];
+        }
+    }
+
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
         if (!this.isConfigured()) {
             console.log(`[MOCK GITLAB] Merge Request Created: ${title} (${head} -> ${base})`);
@@ -124,6 +147,20 @@ export class GitLabProvider implements VcsProvider {
         } catch (error) {
             console.error('Error fetching GitLab MR diff:', error);
             return null;
+        }
+    }
+
+    async mergePullRequest(pullNumber: number): Promise<boolean> {
+        if (!this.isConfigured()) {
+            console.log(`[MOCK GITLAB] Merged MR #${pullNumber}`);
+            return true;
+        }
+        try {
+            await this.client.put(`/projects/${this.projectId}/merge_requests/${pullNumber}/merge`);
+            return true;
+        } catch (error) {
+            console.error('Error merging GitLab MR:', error);
+            return false;
         }
     }
 

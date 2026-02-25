@@ -61,6 +61,28 @@ export class OrchestraProvider implements VcsProvider {
         }
     }
 
+    async listIssues(state: 'open' | 'closed' | 'all' = 'open'): Promise<{ number: number; title: string; state: string }[]> {
+        if (!this.isConfigured()) {
+            return [
+                { number: 1, title: 'Mock Issue 1', state: 'open' },
+                { number: 2, title: 'Mock Issue 2', state: 'closed' }
+            ];
+        }
+        try {
+            const response = await this.client.get(`/projects/${this.projectId}/issues`, {
+                params: { state }
+            });
+            return response.data.map((issue: any) => ({
+                number: issue.number,
+                title: issue.title,
+                state: issue.state
+            }));
+        } catch (error) {
+            console.error('Error listing Orchestra issues:', error);
+            return [];
+        }
+    }
+
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
         if (!this.isConfigured()) {
             console.log(`[MOCK ORCHESTRA] PR Created: ${title} (${head} -> ${base})`);
@@ -120,6 +142,20 @@ export class OrchestraProvider implements VcsProvider {
         } catch (error) {
             console.error('Error fetching Orchestra PR diff:', error);
             return null;
+        }
+    }
+
+    async mergePullRequest(pullNumber: number): Promise<boolean> {
+        if (!this.isConfigured()) {
+            console.log(`[MOCK ORCHESTRA] Merged PR #${pullNumber}`);
+            return true;
+        }
+        try {
+            await this.client.post(`/projects/${this.projectId}/pull-requests/${pullNumber}/merge`);
+            return true;
+        } catch (error) {
+            console.error('Error merging Orchestra PR:', error);
+            return false;
         }
     }
 

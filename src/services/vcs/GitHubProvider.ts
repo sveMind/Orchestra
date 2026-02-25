@@ -69,6 +69,31 @@ export class GitHubProvider implements VcsProvider {
         }
     }
 
+    async listIssues(state: 'open' | 'closed' | 'all' = 'open'): Promise<{ number: number; title: string; state: string }[]> {
+        if (!this.isConfigured()) {
+            return [
+                { number: 1, title: 'Mock Issue 1', state: 'open' },
+                { number: 2, title: 'Mock Issue 2', state: 'closed' }
+            ];
+        }
+        try {
+            const { data } = await this.octokit.issues.listForRepo({
+                owner: this.owner!,
+                repo: this.repo!,
+                state,
+                per_page: 100
+            });
+            return data.map(issue => ({
+                number: issue.number,
+                title: issue.title,
+                state: issue.state
+            }));
+        } catch (error) {
+            console.error('Error listing GitHub issues:', error);
+            return [];
+        }
+    }
+
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
         if (!this.isConfigured()) {
             console.log(`[MOCK GITHUB] PR Created: ${title} (${head} -> ${base})`);
@@ -143,6 +168,24 @@ export class GitHubProvider implements VcsProvider {
         } catch (error) {
             console.error('Error fetching PR diff:', error);
             return null;
+        }
+    }
+
+    async mergePullRequest(pullNumber: number): Promise<boolean> {
+        if (!this.isConfigured()) {
+            console.log(`[MOCK GITHUB] Merged PR #${pullNumber}`);
+            return true;
+        }
+        try {
+            await this.octokit.pulls.merge({
+                owner: this.owner!,
+                repo: this.repo!,
+                pull_number: pullNumber,
+            });
+            return true;
+        } catch (error) {
+            console.error('Error merging GitHub PR:', error);
+            return false;
         }
     }
 

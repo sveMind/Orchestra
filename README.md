@@ -19,6 +19,7 @@ Orchestra simulates a real agile team using specialized AI personas:
 - **Scrum Master**: Organizes tasks and manages agile process simulation.
 - **Technical Writer**: Generates and improves documentation.
 - **UX Designer**: Provides usability guidelines for frontend tasks.
+- **DevOps Engineer**: Improves CI/CD pipelines, infrastructure as code, and automation efficiency.
 
 ### 🔌 Modular Plugin System
 Orchestra is built on a flexible plugin architecture, allowing for easy extension. Current plugins include:
@@ -128,6 +129,47 @@ Generate release notes based on git tags and commits.
 ```bash
 orchestra release-notes v1.2.0
 ```
+
+### 7. Continuous Development Mode
+Run a self-sustaining development loop that continuously monitors requirements, manages issues, and improves the codebase.
+
+```bash
+orchestra continuous ./README.md
+```
+
+**Key Capabilities in Continuous Mode:**
+1.  **Infinite Loop**: The system runs indefinitely, checking for new tasks every few seconds.
+2.  **Requirement Monitoring**: Continuously reads `README.md` for changes in project specifications.
+3.  **Intelligent Task Generation**:
+    - **Product Manager**: Generates feature tasks based on requirements.
+    - **DevOps Engineer**: Proactively suggests pipeline and infrastructure improvements.
+4.  **Developer-Driven Issues**: Developers can report technical debt or side issues during their work, which are automatically converted into new GitHub Issues.
+5.  **Automated Workflow**:
+    - **Plan**: Agents create detailed implementation plans.
+    - **Code**: Developers implement features and fixes.
+    - **Review**: Multi-agent review board (Security, PM, Tech Lead) approves changes.
+    - **Merge**: Automated merging upon approval.
+
+### 8. Initializing Continuous Loop (Recommended)
+Set up your repository to run Orchestra indefinitely using GitHub Actions.
+
+1.  **Initialize the Repository**:
+    ```bash
+    orchestra init
+    ```
+    This command generates the `orchestra-continuous-loop.yml` workflow.
+
+2.  **Trigger the Loop**:
+    - **Push to Main**: Any push to the main branch triggers the loop.
+    - **Scheduled**: The loop runs automatically every hour to ensure progress.
+    - **Manual Dispatch**: You can manually trigger the workflow from the GitHub Actions tab.
+
+The loop will ensure your repository is always active, improving, and responding to new requirements.
+
+**Prerequisites:**
+- `OPENAI_API_KEY` or compatible `AI_BASE_URL`.
+- A configured VCS provider (GitHub, GitLab, Azure DevOps).
+- `GITHUB_TOKEN` (for Issue and PR management).
 
 ---
 

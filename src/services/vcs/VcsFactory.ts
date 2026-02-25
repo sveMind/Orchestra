@@ -15,6 +15,9 @@ class CompositeProvider implements VcsProvider {
     createIssue(title: string, body: string, labels?: string[]): Promise<string | null> {
         return this.issueProvider.createIssue(title, body, labels);
     }
+    listIssues(state?: 'open' | 'closed' | 'all'): Promise<{ number: number; title: string; state: string }[]> {
+        return this.issueProvider.listIssues(state);
+    }
     addComment(issueNumber: number, body: string): Promise<string | null> {
         return this.issueProvider.addComment(issueNumber, body);
     }
@@ -31,6 +34,9 @@ class CompositeProvider implements VcsProvider {
     }
     getPullRequestDiff(pullNumber: number): Promise<string | null> {
         return this.codeProvider.getPullRequestDiff(pullNumber);
+    }
+    mergePullRequest(pullNumber: number): Promise<boolean> {
+        return this.codeProvider.mergePullRequest(pullNumber);
     }
     createRelease(tagName: string, name: string, body: string): Promise<string | null> {
         return this.codeProvider.createRelease(tagName, name, body);
