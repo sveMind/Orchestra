@@ -66,7 +66,14 @@ const loadPlugins = async () => {
             });
           }
 
-          cmd.action(plugin.action);
+          cmd.action(async (...args) => {
+            try {
+              await plugin.action(...args);
+            } catch (error) {
+              console.error(`❌ Error executing command '${plugin.command}':`, error);
+              process.exit(1);
+            }
+          });
           // console.log(`Loaded plugin: ${plugin.name}`);
         }
       } catch (error) {

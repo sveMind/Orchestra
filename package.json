@@ -1,7 +1,7 @@
 {
-  "name": "orchestra-svemind",
+  "name": "orchestra-ai-devops",
   "version": "1.0.0",
-  "description": "Orchestra is a tool for automating pipeline tasks.",
+  "description": "Orchestra is an AI-driven DevOps assistant with a modular plugin architecture.",
   "main": "dist/index.js",
   "bin": {
     "orchestra": "dist/index.js"
@@ -9,7 +9,11 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "PLUGINS.md",
+    "GUIDE.md",
+    "LICENSE",
+    "action.yml",
+    "Dockerfile"
   ],
   "scripts": {
     "test": "jest",

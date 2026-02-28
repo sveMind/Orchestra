@@ -1,50 +1,32 @@
-name: 'Orchestra AI Agent'
-description: 'AI-driven DevOps assistant that automates code reviews, security scans, and testing.'
-author: 'sveMind'
-branding:
-  icon: 'cpu'
-  color: 'blue'
+name: 'Orchestra AI DevOps'
+description: 'AI-powered DevOps automation tool for GitHub Actions.'
 inputs:
   command:
-    description: 'The Orchestra command to execute (e.g., auto, vuln-scan, pr-review)'
+    description: 'Orchestra command to run (e.g., auto, pr-review, continuous)'
     required: true
     default: 'auto'
-  arguments:
-    description: 'Additional arguments for the command'
+  args:
+    description: 'Arguments for the command'
     required: false
     default: ''
   openai_api_key:
-    description: 'OpenAI API Key (can also be set as env var)'
-    required: false
+    description: 'OpenAI API Key'
+    required: true
   github_token:
-    description: 'GitHub Token (can also be set as env var)'
+    description: 'GitHub Token'
+    required: true
+  vcs_provider:
+    description: 'VCS Provider (github, gitlab, azure)'
     required: false
-  version:
-    description: 'Version of Orchestra to install'
-    required: false
-    default: 'latest'
+    default: 'github'
 
 runs:
-  using: "composite"
-  steps:
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-    
-    - name: Install Orchestra
-      shell: bash
-      run: |
-        echo "Installing Orchestra version: ${{ inputs.version }}"
-        if [ "${{ inputs.version }}" = "latest" ]; then
-          npm install -g orchestra-svemind
-        else
-          npm install -g orchestra-svemind@${{ inputs.version }}
-        fi
-
-    - name: Run Orchestra
-      shell: bash
-      run: orchestra ${{ inputs.command }} ${{ inputs.arguments }}
-      env:
-        OPENAI_API_KEY: ${{ inputs.openai_api_key }}
-        GITHUB_TOKEN: ${{ inputs.github_token }}
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.command }}
+    - ${{ inputs.args }}
+  env:
+    OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+    GITHUB_TOKEN: ${{ inputs.github_token }}
+    VCS_PROVIDER: ${{ inputs.vcs_provider }}

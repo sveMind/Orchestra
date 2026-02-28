@@ -29,6 +29,25 @@ Orchestra is built on a flexible plugin architecture, allowing for easy extensio
 - **`doc-gen`**: Auto-generates API references and improves READMEs.
 - **`release-notes`**: Generates professional release notes from git history.
 
+## 🔌 Extending Orchestra (Plugins)
+
+Orchestra is designed to be easily extensible. You can add new commands and capabilities by creating plugins.
+
+### Quick Start
+To create a new plugin, run:
+
+```bash
+npx orchestra create-plugin my-new-feature
+```
+
+This will scaffold a new plugin in `src/plugins/my-new-feature`.
+
+For detailed instructions, see [PLUGINS.md](./PLUGINS.md).
+
+## 📖 Setup & Pipeline Guide
+
+For detailed instructions on initializing a repository and integrating Orchestra into your CI/CD pipelines via NPM, see the [Setup & Pipeline Guide](./GUIDE.md).
+
 ---
 
 ## 🛠️ Installation
@@ -98,125 +117,45 @@ orchestra auto
 npm start -- auto
 ```
 
-### 2. Project Management Simulation
-Have the AI team breakdown a new feature idea into actionable tasks and GitHub Issues.
-```bash
-orchestra project-manager "Build a new user dashboard with dark mode"
-# OR
-orchestra project-manager ./requirements.md
-```
+### 2. CI/CD Integration
 
-### 3. Vulnerability Scanning
-Scan a specific file for security flaws and get auto-generated fix suggestions.
-```bash
-orchestra vuln-scan src/services/auth.ts
-```
+Orchestra is designed to run in any CI/CD pipeline.
 
-### 4. Unit Test Generation
-Manually trigger test generation for a file.
-```bash
-orchestra test-gen src/utils/math.ts
-```
+#### GitHub Actions
+Use the provided action definition:
 
-### 5. Documentation Generation
-Improve existing docs or generate new API references.
-```bash
-orchestra doc-gen src/services/api.ts
-```
-
-### 6. Release Notes
-Generate release notes based on git tags and commits.
-```bash
-orchestra release-notes v1.2.0
-```
-
-### 7. Continuous Development Mode
-Run a self-sustaining development loop that continuously monitors requirements, manages issues, and improves the codebase.
-
-```bash
-orchestra continuous ./README.md
-```
-
-**Key Capabilities in Continuous Mode:**
-1.  **Infinite Loop**: The system runs indefinitely, checking for new tasks every few seconds.
-2.  **Requirement Monitoring**: Continuously reads `README.md` for changes in project specifications.
-3.  **Intelligent Task Generation**:
-    - **Product Manager**: Generates feature tasks based on requirements.
-    - **DevOps Engineer**: Proactively suggests pipeline and infrastructure improvements.
-4.  **Developer-Driven Issues**: Developers can report technical debt or side issues during their work, which are automatically converted into new GitHub Issues.
-5.  **Automated Workflow**:
-    - **Plan**: Agents create detailed implementation plans.
-    - **Code**: Developers implement features and fixes.
-    - **Review**: Multi-agent review board (Security, PM, Tech Lead) approves changes.
-    - **Merge**: Automated merging upon approval.
-
-### 8. Initializing Continuous Loop (Recommended)
-Set up your repository to run Orchestra indefinitely using GitHub Actions.
-
-1.  **Initialize the Repository**:
-    ```bash
-    orchestra init
-    ```
-    This command generates the `orchestra-continuous-loop.yml` workflow.
-
-2.  **Trigger the Loop**:
-    - **Push to Main**: Any push to the main branch triggers the loop.
-    - **Scheduled**: The loop runs automatically every hour to ensure progress.
-    - **Manual Dispatch**: You can manually trigger the workflow from the GitHub Actions tab.
-
-The loop will ensure your repository is always active, improving, and responding to new requirements.
-
-**Prerequisites:**
-- `OPENAI_API_KEY` or compatible `AI_BASE_URL`.
-- A configured VCS provider (GitHub, GitLab, Azure DevOps).
-- `GITHUB_TOKEN` (for Issue and PR management).
-
----
-
-## 🌍 Deployment Options
-
-Orchestra can be easily integrated into your CI/CD pipelines.
-
-### 📚 Integration Guides
-*   **[Pipeline Overview](docs/PIPELINES.md)** - Learn about available agents and commands.
-*   **[GitHub Actions](docs/GITHUB_ACTIONS.md)** - Detailed examples for GitHub workflows.
-*   **[GitLab CI](docs/GITLAB_CI.md)** - Configuration guide for GitLab CI/CD.
-*   **[Integration Configuration](docs/INTEGRATIONS.md)** - Configure multiple providers (GitLab, Azure, Jira).
-
-### Quick Example: GitHub Action
 ```yaml
-name: Orchestra Auto-Pilot
-on: [push]
-jobs:
-  orchestra:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-      - run: npx orchestra-svemind auto
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+steps:
+  - uses: actions/checkout@v3
+  - uses: ./path/to/orchestra/action # If local
+    # OR if published: uses: sveMind/Orchestra@v1
+    with:
+      command: 'pr-review'
+      args: '${{ github.event.pull_request.number }}'
+      openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+      github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-### Webhook Server
-Run Orchestra as a standalone server that listens for GitHub Webhooks.
+#### GitLab CI / Azure Pipelines / Jenkins
+Use the Docker image for universal compatibility:
+
 ```bash
-orchestra server
+docker run --rm \
+  -v $(pwd):/app/work \
+  -e OPENAI_API_KEY=$OPENAI_API_KEY \
+  -e GITHUB_TOKEN=$GITHUB_TOKEN \
+  orchestra-ai \
+  pr-review 123
 ```
 
----
-
-## 🏗️ Architecture
-
-Orchestra uses a **Plugin-based Architecture** where each capability is a standalone module in `src/plugins`. The core system handles:
-- **CLI Parsing** (Commander)
-- **Plugin Loading** (Dynamic Imports)
-- **Agent Service** (OpenAI Integration & Persona Management)
-- **Git Service** (Change detection & History)
+Orchestra automatically detects the CI environment (GitHub Actions, GitLab CI, Azure DevOps) and configures the appropriate VCS provider.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please submit a Pull Request.
+
+## 📄 License
+
+ISC

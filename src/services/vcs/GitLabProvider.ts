@@ -16,7 +16,7 @@ export class GitLabProvider implements VcsProvider {
         this.baseUrl = process.env.GITLAB_URL || 'https://gitlab.com/api/v4';
 
         if (!this.token) {
-            console.warn('Warning: GITLAB_TOKEN is not set. GitLab features will not work.');
+            // Warn but wait for usage to crash
         }
 
         this.client = axios.create({
@@ -32,21 +32,18 @@ export class GitLabProvider implements VcsProvider {
     }
 
     async getDefaultBranch(): Promise<string> {
-        if (!this.isConfigured()) return 'main';
+        if (!this.isConfigured()) throw new Error('GitLab not configured. Missing GITLAB_TOKEN or GITLAB_PROJECT_ID.');
         try {
             const response = await this.client.get(`/projects/${this.projectId}`);
             return response.data.default_branch;
         } catch (error) {
             console.error('Error fetching GitLab default branch:', error);
-            return 'main';
+            throw error;
         }
     }
 
     async createIssue(title: string, body: string, labels: string[] = []): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITLAB] Issue Created: ${title}`);
-            return 'https://gitlab.com/mock/repo/-/issues/123';
-        }
+        if (!this.isConfigured()) throw new Error('GitLab not configured.');
         try {
             const response = await this.client.post(`/projects/${this.projectId}/issues`, {
                 title,
@@ -56,17 +53,12 @@ export class GitLabProvider implements VcsProvider {
             return response.data.web_url;
         } catch (error) {
             console.error('Error creating GitLab issue:', error);
-            return null;
+            throw error;
         }
     }
 
     async listIssues(state: 'open' | 'closed' | 'all' = 'open'): Promise<{ number: number; title: string; state: string }[]> {
-        if (!this.isConfigured()) {
-            return [
-                { number: 1, title: 'Mock Issue 1', state: 'open' },
-                { number: 2, title: 'Mock Issue 2', state: 'closed' }
-            ];
-        }
+        if (!this.isConfigured()) throw new Error('GitLab not configured.');
         try {
             const gitlabState = state === 'all' ? 'all' : (state === 'open' ? 'opened' : 'closed');
             const response = await this.client.get(`/projects/${this.projectId}/issues`, {
@@ -79,15 +71,12 @@ export class GitLabProvider implements VcsProvider {
             }));
         } catch (error) {
             console.error('Error listing GitLab issues:', error);
-            return [];
+            throw error;
         }
     }
 
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITLAB] Merge Request Created: ${title} (${head} -> ${base})`);
-            return 'https://gitlab.com/mock/repo/-/merge_requests/456';
-        }
+        if (!this.isConfigured()) throw new Error('GitLab not configured.');
         try {
             const response = await this.client.post(`/projects/${this.projectId}/merge_requests`, {
                 source_branch: head,
@@ -98,32 +87,26 @@ export class GitLabProvider implements VcsProvider {
             return response.data.web_url;
         } catch (error) {
             console.error('Error creating GitLab MR:', error);
-            return null;
+            throw error;
         }
     }
 
     async addComment(issueNumber: number, body: string): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITLAB] Comment added to #${issueNumber}: ${body.substring(0, 50)}...`);
-            return 'https://gitlab.com/mock/repo/-/issues/123#note_456';
-        }
+        if (!this.isConfigured()) throw new Error('GitLab not configured.');
         try {
             // Note: GitLab uses generic "notes" for issues and MRs. Assuming issueNumber corresponds to an Issue IID.
             const response = await this.client.post(`/projects/${this.projectId}/issues/${issueNumber}/notes`, {
                 body,
             });
-            return `https://gitlab.com/mock/repo/-/issues/${issueNumber}#note_${response.data.id}`;
+            return null; 
         } catch (error) {
             console.error('Error adding GitLab comment:', error);
-            return null;
+            throw error;
         }
     }
 
     async addLabels(issueNumber: number, labels: string[]): Promise<void> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITLAB] Added labels to #${issueNumber}: ${labels.join(', ')}`);
-            return;
-        }
+        if (!this.isConfigured()) throw new Error('GitLab not configured.');
         try {
             // GitLab requires PUT to update issue labels (replacing or adding depends on API usage)
             // Simpler: Use add_labels param
@@ -132,13 +115,12 @@ export class GitLabProvider implements VcsProvider {
             });
         } catch (error) {
             console.error('Error adding GitLab labels:', error);
+            throw error;
         }
     }
 
     async getPullRequestDiff(pullNumber: number): Promise<string | null> {
-        if (!this.isConfigured()) {
-            return 'diff --git a/src/index.ts b/src/index.ts...';
-        }
+        if (!this.isConfigured()) throw new Error('GitLab not configured.');
         try {
             const response = await this.client.get(`/projects/${this.projectId}/merge_requests/${pullNumber}/diffs`);
             // This returns JSON objects of diffs, not raw diff text.
@@ -146,29 +128,23 @@ export class GitLabProvider implements VcsProvider {
             return JSON.stringify(response.data); 
         } catch (error) {
             console.error('Error fetching GitLab MR diff:', error);
-            return null;
+            throw error;
         }
     }
 
     async mergePullRequest(pullNumber: number): Promise<boolean> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITLAB] Merged MR #${pullNumber}`);
-            return true;
-        }
+        if (!this.isConfigured()) throw new Error('GitLab not configured.');
         try {
             await this.client.put(`/projects/${this.projectId}/merge_requests/${pullNumber}/merge`);
             return true;
         } catch (error) {
             console.error('Error merging GitLab MR:', error);
-            return false;
+            throw error;
         }
     }
 
     async createRelease(tagName: string, name: string, body: string): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITLAB] Release Created: ${name} (${tagName})`);
-            return 'https://gitlab.com/mock/repo/-/releases/v1.0.0';
-        }
+        if (!this.isConfigured()) throw new Error('GitLab not configured.');
         try {
             const response = await this.client.post(`/projects/${this.projectId}/releases`, {
                 tag_name: tagName,
@@ -178,7 +154,7 @@ export class GitLabProvider implements VcsProvider {
             return response.data._links.self;
         } catch (error) {
             console.error('Error creating GitLab release:', error);
-            return null;
+            throw error;
         }
     }
 }

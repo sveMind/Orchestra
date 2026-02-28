@@ -23,7 +23,7 @@ export class GitHubProvider implements VcsProvider {
         }
 
         if (!this.token) {
-            console.warn('Warning: GITHUB_TOKEN is not set. GitHub features will not work.');
+            // Warn but wait for usage to crash
         }
 
         this.octokit = new Octokit({
@@ -36,7 +36,7 @@ export class GitHubProvider implements VcsProvider {
     }
 
     async getDefaultBranch(): Promise<string> {
-        if (!this.isConfigured()) return 'main';
+        if (!this.isConfigured()) throw new Error('GitHub not configured. Missing GITHUB_TOKEN, GITHUB_OWNER, or GITHUB_REPO.');
         try {
             const { data } = await this.octokit.repos.get({
                 owner: this.owner!,
@@ -45,15 +45,12 @@ export class GitHubProvider implements VcsProvider {
             return data.default_branch;
         } catch (error) {
             console.error('Error fetching default branch:', error);
-            return 'main';
+            throw error;
         }
     }
 
     async createIssue(title: string, body: string, labels: string[] = []): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITHUB] Issue Created: ${title}`);
-            return 'https://github.com/mock/repo/issues/123';
-        }
+        if (!this.isConfigured()) throw new Error('GitHub not configured.');
         try {
             const response = await this.octokit.issues.create({
                 owner: this.owner!,
@@ -65,17 +62,12 @@ export class GitHubProvider implements VcsProvider {
             return response.data.html_url;
         } catch (error) {
             console.error('Error creating GitHub issue:', error);
-            return null;
+            throw error;
         }
     }
 
     async listIssues(state: 'open' | 'closed' | 'all' = 'open'): Promise<{ number: number; title: string; state: string }[]> {
-        if (!this.isConfigured()) {
-            return [
-                { number: 1, title: 'Mock Issue 1', state: 'open' },
-                { number: 2, title: 'Mock Issue 2', state: 'closed' }
-            ];
-        }
+        if (!this.isConfigured()) throw new Error('GitHub not configured.');
         try {
             const { data } = await this.octokit.issues.listForRepo({
                 owner: this.owner!,
@@ -90,15 +82,12 @@ export class GitHubProvider implements VcsProvider {
             }));
         } catch (error) {
             console.error('Error listing GitHub issues:', error);
-            return [];
+            throw error;
         }
     }
 
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITHUB] PR Created: ${title} (${head} -> ${base})`);
-            return 'https://github.com/mock/repo/pull/456';
-        }
+        if (!this.isConfigured()) throw new Error('GitHub not configured.');
         try {
             const response = await this.octokit.pulls.create({
                 owner: this.owner!,
@@ -111,15 +100,12 @@ export class GitHubProvider implements VcsProvider {
             return response.data.html_url;
         } catch (error) {
             console.error('Error creating Pull Request:', error);
-            return null;
+            throw error;
         }
     }
 
     async addComment(issueNumber: number, body: string): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITHUB] Comment added to #${issueNumber}: ${body.substring(0, 50)}...`);
-            return 'https://github.com/mock/repo/issues/123#comment-456';
-        }
+        if (!this.isConfigured()) throw new Error('GitHub not configured.');
         try {
             const response = await this.octokit.issues.createComment({
                 owner: this.owner!,
@@ -130,15 +116,12 @@ export class GitHubProvider implements VcsProvider {
             return response.data.html_url;
         } catch (error) {
             console.error('Error adding comment:', error);
-            return null;
+            throw error;
         }
     }
 
     async addLabels(issueNumber: number, labels: string[]): Promise<void> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITHUB] Added labels to #${issueNumber}: ${labels.join(', ')}`);
-            return;
-        }
+        if (!this.isConfigured()) throw new Error('GitHub not configured.');
         try {
             await this.octokit.issues.addLabels({
                 owner: this.owner!,
@@ -148,13 +131,12 @@ export class GitHubProvider implements VcsProvider {
             });
         } catch (error) {
             console.error('Error adding labels:', error);
+            throw error;
         }
     }
 
     async getPullRequestDiff(pullNumber: number): Promise<string | null> {
-        if (!this.isConfigured()) {
-            return 'diff --git a/src/index.ts b/src/index.ts\nindex 83a040e..d00491f 100644\n--- a/src/index.ts\n+++ b/src/index.ts\n@@ -1,5 +1,5 @@\n-console.log("Hello");\n+console.log("Hello World");';
-        }
+        if (!this.isConfigured()) throw new Error('GitHub not configured.');
         try {
             const response = await this.octokit.pulls.get({
                 owner: this.owner!,
@@ -167,15 +149,12 @@ export class GitHubProvider implements VcsProvider {
             return response.data as unknown as string;
         } catch (error) {
             console.error('Error fetching PR diff:', error);
-            return null;
+            throw error;
         }
     }
 
     async mergePullRequest(pullNumber: number): Promise<boolean> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITHUB] Merged PR #${pullNumber}`);
-            return true;
-        }
+        if (!this.isConfigured()) throw new Error('GitHub not configured.');
         try {
             await this.octokit.pulls.merge({
                 owner: this.owner!,
@@ -185,15 +164,12 @@ export class GitHubProvider implements VcsProvider {
             return true;
         } catch (error) {
             console.error('Error merging GitHub PR:', error);
-            return false;
+            throw error;
         }
     }
 
     async createRelease(tagName: string, name: string, body: string): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK GITHUB] Release Created: ${name} (${tagName})`);
-            return 'https://github.com/mock/repo/releases/tag/v1.0.0';
-        }
+        if (!this.isConfigured()) throw new Error('GitHub not configured.');
         try {
             const response = await this.octokit.repos.createRelease({
                 owner: this.owner!,
@@ -205,7 +181,7 @@ export class GitHubProvider implements VcsProvider {
             return response.data.html_url;
         } catch (error) {
             console.error('Error creating GitHub release:', error);
-            return null;
+            throw error;
         }
     }
 }

@@ -5,5 +5,5 @@ export interface OrchestraPlugin {
   description: string;
   command: string;
   args?: { name: string; description: string; required?: boolean }[];
-  action: (args: any) => Promise<void>;
+  action: (...args: any[]) => Promise<void>;
 }

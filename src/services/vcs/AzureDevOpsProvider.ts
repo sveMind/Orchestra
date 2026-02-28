@@ -24,7 +24,7 @@ export class AzureDevOpsProvider implements VcsProvider {
         this.repoId = process.env.AZURE_REPO;
 
         if (!this.token || !this.orgUrl) {
-            console.warn('Warning: AZURE_PERSONAL_ACCESS_TOKEN or AZURE_ORG_URL is not set.');
+            // Warn but don't crash yet, only crash when used
         } else {
             const authHandler = azdev.getPersonalAccessTokenHandler(this.token);
             this.connection = new azdev.WebApi(this.orgUrl, authHandler);
@@ -43,7 +43,7 @@ export class AzureDevOpsProvider implements VcsProvider {
     }
 
     async getDefaultBranch(): Promise<string> {
-        if (!this.isConfigured()) return 'main';
+        if (!this.isConfigured()) throw new Error('Azure DevOps not configured. Missing AZURE_ORG_URL, AZURE_PERSONAL_ACCESS_TOKEN, AZURE_PROJECT, or AZURE_REPO.');
         await this.init();
         try {
             // Azure Repos usually use 'main' or 'master'
@@ -51,15 +51,12 @@ export class AzureDevOpsProvider implements VcsProvider {
             return repo?.defaultBranch?.replace('refs/heads/', '') || 'main';
         } catch (error) {
             console.error('Error fetching Azure default branch:', error);
-            return 'main';
+            throw error;
         }
     }
 
     async createIssue(title: string, body: string, labels: string[] = []): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK AZURE] Work Item Created: ${title}`);
-            return 'https://dev.azure.com/mock/project/_workitems/edit/123';
-        }
+        if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
         await this.init();
         try {
             const patchDocument: JsonPatchDocument = [
@@ -84,17 +81,12 @@ export class AzureDevOpsProvider implements VcsProvider {
             return workItem?._links?.html?.href || null;
         } catch (error) {
             console.error('Error creating Azure Work Item:', error);
-            return null;
+            throw error;
         }
     }
     
     async listIssues(state: 'open' | 'closed' | 'all' = 'open'): Promise<{ number: number; title: string; state: string }[]> {
-         if (!this.isConfigured()) {
-             return [
-                 { number: 1, title: 'Mock Issue 1', state: 'open' },
-                 { number: 2, title: 'Mock Issue 2', state: 'closed' }
-             ];
-         }
+         if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
          await this.init();
          try {
              let whereClause = "[System.TeamProject] = @project AND [System.WorkItemType] = 'Task'";
@@ -125,15 +117,12 @@ export class AzureDevOpsProvider implements VcsProvider {
              }));
          } catch (error) {
              console.error('Error listing Azure Work Items:', error);
-             return [];
+             throw error;
          }
     }
 
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK AZURE] PR Created: ${title}`);
-            return 'https://dev.azure.com/mock/project/_git/repo/pullrequest/456';
-        }
+        if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
         await this.init();
         try {
             const pr = await this.gitApi?.createPullRequest({
@@ -145,15 +134,12 @@ export class AzureDevOpsProvider implements VcsProvider {
             return (pr as any)?.repository?.webUrl ? `${(pr as any).repository.webUrl}/pullrequest/${pr?.pullRequestId}` : null;
         } catch (error) {
             console.error('Error creating Azure PR:', error);
-            return null;
+            throw error;
         }
     }
 
     async addComment(issueNumber: number, body: string): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK AZURE] Comment added to Work Item #${issueNumber}: ${body.substring(0, 50)}...`);
-            return 'https://dev.azure.com/mock/project/_workitems/edit/123';
-        }
+        if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
         await this.init();
         try {
             const patchDocument: JsonPatchDocument = [
@@ -167,15 +153,12 @@ export class AzureDevOpsProvider implements VcsProvider {
             return workItem?._links?.html?.href || null;
         } catch (error) {
             console.error('Error adding comment to Azure Work Item:', error);
-            return null;
+            throw error;
         }
     }
 
     async addLabels(issueNumber: number, labels: string[]): Promise<void> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK AZURE] Added tags to #${issueNumber}: ${labels.join(', ')}`);
-            return;
-        }
+        if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
         await this.init();
         try {
             // Azure uses "Tags" field, semi-colon separated. Need to get existing tags first to append.
@@ -195,19 +178,44 @@ export class AzureDevOpsProvider implements VcsProvider {
             }
         } catch (error) {
             console.error('Error adding tags to Azure Work Item:', error);
+            throw error;
         }
     }
 
     async getPullRequestDiff(pullNumber: number): Promise<string | null> {
-        // Azure API for diffs is complex (commit based). Returning mock or simplified.
-        return 'Azure DevOps diff retrieval not fully implemented in this version.';
+        if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
+        await this.init();
+        try {
+            // Get iterations to find the latest changes
+            const iterations = await this.gitApi?.getPullRequestIterations(this.repoId!, pullNumber, this.project);
+            if (!iterations || iterations.length === 0) return null;
+
+            const lastIteration = iterations[iterations.length - 1];
+            if (!lastIteration.id) return null;
+
+            const changes = await this.gitApi?.getPullRequestIterationChanges(this.repoId!, pullNumber, lastIteration.id, this.project);
+            
+            if (!changes || !changes.changeEntries) return null;
+
+            let diffOutput = '';
+            for (const change of changes.changeEntries) {
+                const path = change.item?.path || 'unknown';
+                const changeType = change.changeType; // 1=Add, 2=Edit, 16=Delete
+                diffOutput += `File: ${path} (ChangeType: ${changeType})\n`;
+                
+                // Fetching content is expensive (N+1 calls), so we skip it for this version
+                // to keep it fast. Agents will have to rely on file names or we need a better diff API.
+                // However, for critical files, we could fetch content.
+            }
+            return diffOutput;
+        } catch (error) {
+            console.error('Error fetching Azure PR Diff:', error);
+            throw error;
+        }
     }
 
     async mergePullRequest(pullNumber: number): Promise<boolean> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK AZURE] Merged PR #${pullNumber}`);
-            return true;
-        }
+        if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
         await this.init();
         try {
             // Status 3 is Completed
@@ -220,17 +228,14 @@ export class AzureDevOpsProvider implements VcsProvider {
             return true;
         } catch (error) {
             console.error('Error merging Azure PR:', error);
-            return false;
+            throw error;
         }
     }
 
     async createRelease(tagName: string, name: string, body: string): Promise<string | null> {
         // Azure Pipelines usually handles releases, or Tags in Repos.
         // We can create a Tag.
-        if (!this.isConfigured()) {
-            console.log(`[MOCK AZURE] Tag Created: ${name} (${tagName})`);
-            return 'https://dev.azure.com/mock/project/_git/repo/tags';
-        }
+        if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
         // Implementation of Git Tag creation via API is omitted for brevity but possible.
         return null;
     }

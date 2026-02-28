@@ -52,6 +52,17 @@ export class VcsFactory {
         // 1. Determine Code Provider (VCS)
         let vcsType = process.env.VCS_PROVIDER;
         
+        // Auto-detect CI Environment if not explicitly set
+        if (!vcsType) {
+            if (process.env.GITHUB_ACTIONS) {
+                vcsType = 'github';
+            } else if (process.env.GITLAB_CI) {
+                vcsType = 'gitlab';
+            } else if (process.env.TF_BUILD || process.env.AZURE_HTTP_USER_AGENT) {
+                vcsType = 'azure';
+            }
+        }
+        
         // Auto-detect Orchestra service if token is present and no other provider is explicitly set
         if (!vcsType && process.env.ORCHESTRA_TOKEN) {
             vcsType = 'orchestra';

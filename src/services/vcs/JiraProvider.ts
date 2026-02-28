@@ -38,10 +38,7 @@ export class JiraProvider implements IssueProvider {
     }
 
     async createIssue(title: string, body: string, labels: string[] = []): Promise<string | null> {
-        if (!this.isConfigured()) {
-            console.log(`[MOCK JIRA] Issue Created: ${title} in project ${this.projectKey || 'MOCK'}`);
-            return `https://${this.host || 'mock.atlassian.net'}/browse/${this.projectKey || 'MOCK'}-123`;
-        }
+        if (!this.isConfigured()) throw new Error('Jira not configured. Missing JIRA_HOST, JIRA_EMAIL, JIRA_API_TOKEN, or JIRA_PROJECT_KEY.');
         try {
             const response = await this.client.post('/issue', {
                 fields: {
@@ -73,7 +70,7 @@ export class JiraProvider implements IssueProvider {
             return `https://${this.host}/browse/${response.data.key}`;
         } catch (error) {
             console.error('Error creating Jira issue:', error);
-            return null;
+            throw error;
         }
     }
 
@@ -86,10 +83,7 @@ export class JiraProvider implements IssueProvider {
         
         const issueKey = `${this.projectKey}-${issueNumber}`;
 
-        if (!this.isConfigured()) {
-            console.log(`[MOCK JIRA] Comment added to ${issueKey}: ${body.substring(0, 50)}...`);
-            return `https://${this.host || 'mock.atlassian.net'}/browse/${issueKey}`;
-        }
+        if (!this.isConfigured()) throw new Error('Jira not configured. Missing JIRA_HOST, JIRA_EMAIL, JIRA_API_TOKEN, or JIRA_PROJECT_KEY.');
         try {
             const response = await this.client.post(`/issue/${issueKey}/comment`, {
                 body: {
@@ -111,17 +105,12 @@ export class JiraProvider implements IssueProvider {
             return response.data.self; // Jira API returns self link, not web link directly in all cases
         } catch (error) {
             console.error('Error adding Jira comment:', error);
-            return null;
+            throw error;
         }
     }
 
     async listIssues(state: 'open' | 'closed' | 'all' = 'open'): Promise<{ number: number; title: string; state: string }[]> {
-        if (!this.isConfigured()) {
-            return [
-                { number: 1, title: 'Mock Jira Issue 1', state: 'To Do' },
-                { number: 2, title: 'Mock Jira Issue 2', state: 'Done' }
-            ];
-        }
+        if (!this.isConfigured()) throw new Error('Jira not configured. Missing JIRA_HOST, JIRA_EMAIL, JIRA_API_TOKEN, or JIRA_PROJECT_KEY.');
         try {
             let jql = `project = ${this.projectKey}`;
             
@@ -150,16 +139,13 @@ export class JiraProvider implements IssueProvider {
             });
         } catch (error) {
             console.error('Error listing Jira issues:', error);
-            return [];
+            throw error;
         }
     }
 
     async addLabels(issueNumber: number, labels: string[]): Promise<void> {
         const issueKey = `${this.projectKey}-${issueNumber}`;
-        if (!this.isConfigured()) {
-            console.log(`[MOCK JIRA] Added labels to ${issueKey}: ${labels.join(', ')}`);
-            return;
-        }
+        if (!this.isConfigured()) throw new Error('Jira not configured. Missing JIRA_HOST, JIRA_EMAIL, JIRA_API_TOKEN, or JIRA_PROJECT_KEY.');
         try {
             await this.client.put(`/issue/${issueKey}`, {
                 fields: {
@@ -168,6 +154,7 @@ export class JiraProvider implements IssueProvider {
             });
         } catch (error) {
             console.error('Error adding Jira labels:', error);
+            throw error;
         }
     }
 }
