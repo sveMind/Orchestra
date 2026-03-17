@@ -1,7 +1,8 @@
-import { add, subtract } from './sample'; // Assumption
+import vulnScanPlugin from './index';
 
-describe('Generated Tests', () => {
-    test('add should return sum', () => {
-        expect(add(1, 2)).toBe(3);
-    });
+describe('vuln-scan plugin', () => {
+  test('exports expected command metadata', () => {
+    expect(vulnScanPlugin.command).toBe('vuln-scan');
+    expect(typeof vulnScanPlugin.action).toBe('function');
+  });
 });

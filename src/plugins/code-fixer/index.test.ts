@@ -1,7 +1,8 @@
-import { add, subtract } from './sample'; // Assumption
+import codeFixerPlugin from './index';
 
-describe('Generated Tests', () => {
-    test('add should return sum', () => {
-        expect(add(1, 2)).toBe(3);
-    });
+describe('code-fixer plugin', () => {
+  test('exports expected command metadata', () => {
+    expect(codeFixerPlugin.command).toBe('fix');
+    expect(typeof codeFixerPlugin.action).toBe('function');
+  });
 });

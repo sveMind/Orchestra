@@ -1,7 +1,8 @@
-import { add, subtract } from './sample'; // Assumption
+import devCyclePlugin from './index';
 
-describe('Generated Tests', () => {
-    test('add should return sum', () => {
-        expect(add(1, 2)).toBe(3);
-    });
+describe('dev-cycle plugin', () => {
+  test('exports expected command metadata', () => {
+    expect(devCyclePlugin.command).toBe('dev-cycle');
+    expect(typeof devCyclePlugin.action).toBe('function');
+  });
 });

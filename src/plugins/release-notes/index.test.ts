@@ -1,7 +1,8 @@
-import { add, subtract } from './sample'; // Assumption
+import releaseNotesPlugin from './index';
 
-describe('Generated Tests', () => {
-    test('add should return sum', () => {
-        expect(add(1, 2)).toBe(3);
-    });
+describe('release-notes plugin', () => {
+  test('exports expected command metadata', () => {
+    expect(releaseNotesPlugin.command).toBe('release-notes');
+    expect(typeof releaseNotesPlugin.action).toBe('function');
+  });
 });

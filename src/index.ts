@@ -7,12 +7,23 @@ import { OrchestraPlugin } from './types';
 
 dotenv.config();
 
+const getPackageVersion = (): string => {
+  try {
+    const packageJsonPath = path.join(__dirname, '..', 'package.json');
+    const raw = fs.readFileSync(packageJsonPath, 'utf8');
+    const parsed = JSON.parse(raw) as { version?: string };
+    return parsed.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+};
+
 const program = new Command();
 
 program
   .name('orchestra')
   .description('Orchestra: Automated pipeline tasks with plugin architecture.')
-  .version('1.0.0');
+  .version(getPackageVersion());
 
 // --- Server Command ---
 program

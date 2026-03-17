@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Orchestra is an AI-driven DevOps assistant with a modular plugin architecture.",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "orchestra": "dist/index.js"
   },
@@ -11,13 +12,13 @@
     "README.md",
     "PLUGINS.md",
     "GUIDE.md",
-    "LICENSE",
     "action.yml",
     "Dockerfile"
   ],
   "scripts": {
     "test": "jest",
-    "build": "tsc",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepublishOnly": "npm run build",
     "start": "ts-node src/index.ts",
     "dev": "ts-node src/index.ts"

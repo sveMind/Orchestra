@@ -1,7 +1,13 @@
-import { add, subtract } from './sample'; // Assumption
+import { buildBranchName } from './gitService';
 
-describe('Generated Tests', () => {
-    test('add should return sum', () => {
-        expect(add(1, 2)).toBe(3);
-    });
+describe('buildBranchName', () => {
+  test('includes kind and slugified context', () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1710000000000);
+    expect(buildBranchName('feature', 'Hello World!')).toContain('orchestra/feature/hello-world-');
+  });
+
+  test('omits context when empty', () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1710000000000);
+    expect(buildBranchName('chore', '')).toContain('orchestra/chore-');
+  });
 });

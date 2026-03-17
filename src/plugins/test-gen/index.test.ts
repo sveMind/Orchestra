@@ -1,7 +1,8 @@
-import { add, subtract } from './sample'; // Assumption
+import testGenPlugin from './index';
 
-describe('Generated Tests', () => {
-    test('add should return sum', () => {
-        expect(add(1, 2)).toBe(3);
-    });
+describe('test-gen plugin', () => {
+  test('exports expected command metadata', () => {
+    expect(testGenPlugin.command).toBe('test-gen');
+    expect(typeof testGenPlugin.action).toBe('function');
+  });
 });
