@@ -1,6 +1,6 @@
 import { OrchestraPlugin } from '../../types';
 import { getChangedFiles, getDiff } from '../../services/gitService';
-import { consultAgent, AgentRole } from '../../services/agentService';
+import { consultAgentRouted, AgentRole } from '../../services/agentService';
 import { generateTests } from '../test-gen';
 import { scanForVulnerabilities } from '../vuln-scan';
 import { generateDocumentation } from '../doc-gen';
@@ -40,7 +40,7 @@ const runAutoPilot = async (): Promise<void> => {
     }
 
     // Consult the Architect/DevOps Agent
-    const planRaw = await consultAgent(
+    const planRaw = await consultAgentRouted(
         AgentRole.ARCHITECT,
         `Analyze the changes in the following file and determine the necessary pipeline steps.
         

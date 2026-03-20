@@ -33,8 +33,8 @@ jobs:
 
       - name: Run Orchestra Auto-Pilot
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
-          AI_MODEL: ${{ secrets.AI_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY || secrets.OPENAI_API_KEY }}
+          AI_BASE_URL: https://openrouter.ai/api/v1
+          AI_MODEL: ${{ secrets.AI_MODEL || 'openrouter/auto' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm start -- auto

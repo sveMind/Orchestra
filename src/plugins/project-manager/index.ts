@@ -1,5 +1,5 @@
 import { OrchestraPlugin } from '../../types';
-import { consultAgent, AgentRole } from '../../services/agentService';
+import { consultAgentRouted, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { runFacilitatedDiscussion } from '../../services/agentOrchestrator';
 import fs from 'fs';
@@ -23,7 +23,7 @@ export const manageProject = async (input: string, instruction?: string): Promis
 
   try {
     // Step 1: Product Manager defines the requirements/epics
-    const pmAnalysis = await consultAgent(
+    const pmAnalysis = await consultAgentRouted(
         AgentRole.PRODUCT_MANAGER,
         'Analyze this requirement (which might be a README or a raw string). Break it down into clear acceptance criteria and business value.',
         requirement
@@ -31,7 +31,7 @@ export const manageProject = async (input: string, instruction?: string): Promis
     console.log(`\n[Product Manager]:\n${pmAnalysis}`);
 
     // Step 2: Architect designs the solution
-    const architectDesign = await consultAgent(
+    const architectDesign = await consultAgentRouted(
         AgentRole.ARCHITECT,
         'Based on the requirements, outline the technical architecture and necessary components.',
         pmAnalysis
@@ -40,17 +40,17 @@ export const manageProject = async (input: string, instruction?: string): Promis
 
     console.log(`\nGathering Team Input (Huddle)...`);
     const [devInput, qaInput, secInput] = await Promise.all([
-        consultAgent(
+        consultAgentRouted(
             AgentRole.SOFTWARE_ENGINEER,
             'Review the requirements and architecture. Identify key implementation challenges and libraries needed.',
             `${pmAnalysis}\n${architectDesign}`
         ),
-        consultAgent(
+        consultAgentRouted(
             AgentRole.QA_ENGINEER,
             'Review the requirements. Outline the testing strategy and key test cases.',
             pmAnalysis
         ),
-        consultAgent(
+        consultAgentRouted(
             AgentRole.SECURITY_ENGINEER,
             'Review the architecture. Identify potential security risks and mitigations.',
             architectDesign
@@ -70,7 +70,7 @@ export const manageProject = async (input: string, instruction?: string): Promis
     );
 
     // Step 4: Scrum Master breaks it down into tasks
-    const tasksRaw = await consultAgent(
+    const tasksRaw = await consultAgentRouted(
         AgentRole.SCRUM_MASTER,
         'Break this project down into a list of actionable tasks for the dev team. Output as a JSON list of short strings (max 14 words each). No extra explanations.',
         `Requirements:\n${pmAnalysis}\n\nArchitecture:\n${architectDesign}\n\nDev Notes:\n${devInput}\n\nQA Strategy:\n${qaInput}\n\nSecurity Risks:\n${secInput}\n\nTeam Discussion:\n${teamDiscussion}`
@@ -129,7 +129,7 @@ ${tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
         // UX Designer input if needed
         let additionalContext = '';
         if (task.toLowerCase().includes('ui') || task.toLowerCase().includes('frontend') || task.toLowerCase().includes('design')) {
-             const uxInput = await consultAgent(AgentRole.UX_DESIGNER, 'Provide UX guidelines for this task.', task);
+             const uxInput = await consultAgentRouted(AgentRole.UX_DESIGNER, 'Provide UX guidelines for this task.', task);
              additionalContext += `\n\n**UX Guidelines:**\n${uxInput}`;
         }
 

@@ -1,5 +1,5 @@
 name: 'Orchestra AI DevOps'
-description: 'AI-powered DevOps automation tool for GitHub Actions.'
+description: 'AI-powered DevOps automation tool for GitHub Actions (OpenRouter supported).'
 inputs:
   command:
     description: 'Orchestra command to run (e.g., auto, pr-review, continuous)'
@@ -9,9 +9,21 @@ inputs:
     description: 'Arguments for the command'
     required: false
     default: ''
-  openai_api_key:
-    description: 'OpenAI API Key'
+  openrouter_api_key:
+    description: 'OpenRouter API Key (passed as OPENAI_API_KEY)'
     required: true
+  openai_api_key:
+    description: 'OpenAI API Key (deprecated; use openrouter_api_key)'
+    required: false
+    default: ''
+  ai_model:
+    description: 'Model name (recommended: openrouter/<model>)'
+    required: false
+    default: 'openrouter/auto'
+  ai_base_url:
+    description: 'Base URL override (optional)'
+    required: false
+    default: 'https://openrouter.ai/api/v1'
   github_token:
     description: 'GitHub Token'
     required: true
@@ -27,6 +39,8 @@ runs:
     - ${{ inputs.command }}
     - ${{ inputs.args }}
   env:
-    OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+    OPENAI_API_KEY: ${{ inputs.openrouter_api_key || inputs.openai_api_key }}
+    AI_MODEL: ${{ inputs.ai_model }}
+    AI_BASE_URL: ${{ inputs.ai_base_url }}
     GITHUB_TOKEN: ${{ inputs.github_token }}
     VCS_PROVIDER: ${{ inputs.vcs_provider }}

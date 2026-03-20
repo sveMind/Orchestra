@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { OrchestraPlugin } from '../types';
-import { consultAgent, AgentRole } from './agentService';
+import { consultAgentRouted, AgentRole } from './agentService';
 import { extractCodeBlock } from '../utils/codeExtractor';
 
 export type FileAgentPluginConfig = {
@@ -53,7 +53,7 @@ export const createFileAgentPlugin = (config: FileAgentPluginConfig): OrchestraP
             const task = config.buildTask({ fileName, filePath, extraArgs });
             const context = config.includeContentInContext === false ? '' : content;
 
-            const aiResponse = await consultAgent(config.role, task, context);
+            const aiResponse = await consultAgentRouted(config.role, task, context);
 
             const extractedContent = config.extractCodeBlock
                 ? (extractCodeBlock(aiResponse) || aiResponse)

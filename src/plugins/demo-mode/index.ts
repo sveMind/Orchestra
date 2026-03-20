@@ -1,5 +1,5 @@
 import { OrchestraPlugin } from '../../types';
-import { consultAgent, AgentRole, getAgentIcon } from '../../services/agentService';
+import { consultAgentRouted, AgentRole, getAgentIcon } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { runFacilitatedDiscussion } from '../../services/agentOrchestrator';
 import { runDevCycle } from '../dev-cycle';
@@ -25,7 +25,7 @@ export const runDemoMode = async (input: string): Promise<void> => {
         console.log(`\n${getAgentIcon(AgentRole.PRODUCT_MANAGER)} Creating detailed project description in a separate repository...`);
         
         // 1. Generate detailed requirements from high-level input
-        const detailedReadme = await consultAgent(
+        const detailedReadme = await consultAgentRouted(
             AgentRole.PRODUCT_MANAGER,
             `Create a detailed README.md for a software project based on this high-level request: "${input}".
             Include:
@@ -56,14 +56,14 @@ export const runDemoMode = async (input: string): Promise<void> => {
     // --- Step 1: Project Planning ---
     console.log(`\n${getAgentIcon(AgentRole.PRODUCT_MANAGER)} [Project Planner] Initiating Project Planning...`);
 
-    const pmAnalysis = await consultAgent(
+    const pmAnalysis = await consultAgentRouted(
         AgentRole.PRODUCT_MANAGER,
         'Analyze this requirement. Break it down into clear acceptance criteria and business value.',
         requirement
     );
     console.log(`\n${getAgentIcon(AgentRole.PRODUCT_MANAGER)} PM Analysis:\n${pmAnalysis.substring(0, 200)}...`);
 
-    const architectDesign = await consultAgent(
+    const architectDesign = await consultAgentRouted(
         AgentRole.ARCHITECT,
         'Based on the requirements, outline the technical architecture.',
         pmAnalysis
@@ -73,8 +73,8 @@ export const runDemoMode = async (input: string): Promise<void> => {
     // Team Huddle
     console.log(`\n👥 Gathering Team Input...`);
     const [devInput, qaInput] = await Promise.all([
-        consultAgent(AgentRole.SOFTWARE_ENGINEER, 'Identify implementation challenges.', `${pmAnalysis}\n${architectDesign}`),
-        consultAgent(AgentRole.QA_ENGINEER, 'Outline testing strategy. Ensure 80% code coverage.', pmAnalysis)
+        consultAgentRouted(AgentRole.SOFTWARE_ENGINEER, 'Identify implementation challenges.', `${pmAnalysis}\n${architectDesign}`),
+        consultAgentRouted(AgentRole.QA_ENGINEER, 'Outline testing strategy. Ensure 80% code coverage.', pmAnalysis)
     ]);
 
     const teamDiscussion = await runFacilitatedDiscussion(
@@ -89,7 +89,7 @@ export const runDemoMode = async (input: string): Promise<void> => {
     );
 
     // Create Tasks
-    const tasksRaw = await consultAgent(
+    const tasksRaw = await consultAgentRouted(
         AgentRole.SCRUM_MASTER,
         'Break this project down into a list of actionable tasks. Output as a JSON list of objects with "title" and "description" fields. No extra text.',
         `Requirements:\n${pmAnalysis}\n\nArchitecture:\n${architectDesign}\n\nDiscussion:\n${teamDiscussion}`

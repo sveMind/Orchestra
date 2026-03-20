@@ -62,7 +62,7 @@ Rebuild the project and run your new command:
 
 ```bash
 npm run build
-npx orchestra awesome "My Project"
+npx orchestra-ai-devops awesome "My Project"
 ```
 
 ## 🛠️ Best Practices

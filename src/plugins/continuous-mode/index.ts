@@ -1,6 +1,6 @@
 
 import { OrchestraPlugin } from '../../types';
-import { consultAgent, AgentRole, getAgentIcon } from '../../services/agentService';
+import { consultAgentRouted, AgentRole, getAgentIcon } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { runFacilitatedDiscussion } from '../../services/agentOrchestrator';
 import { runDevCycle } from '../dev-cycle';
@@ -64,14 +64,14 @@ export const runContinuousMode = async (input: string): Promise<void> => {
                 }
 
                 // Consult PM for Feature Tasks
-                const pmSuggestions = await consultAgent(
+                const pmSuggestions = await consultAgentRouted(
                     AgentRole.PRODUCT_MANAGER,
                     'Review the project requirements and current codebase. Suggest 1-2 critical tasks to implement next. If the project is complete, suggest improvements or refactoring. Output JSON list of objects with "title" and "description".',
                     `Requirements:\n${requirement}`
                 );
 
                 // Consult DevOps for Pipeline Tasks
-                const devopsSuggestions = await consultAgent(
+                const devopsSuggestions = await consultAgentRouted(
                     AgentRole.DEVOPS_ENGINEER,
                     'Review the CI/CD pipelines (.github/workflows) and project structure. Suggest 1 task to improve automation, security, or build speed. Output JSON list of objects with "title" and "description".',
                     'Project Context: Standard Node.js/TypeScript project.'
@@ -125,7 +125,7 @@ export const runContinuousMode = async (input: string): Promise<void> => {
                 console.log(`👷 Assigned to: ${getAgentIcon(primaryAgent)} ${primaryAgent}`);
 
                 // Planning
-                const plan = await consultAgent(
+                const plan = await consultAgentRouted(
                     primaryAgent,
                     `Create a plan to resolve this issue: "${issue.title}".`,
                     `Issue #${issue.number}`

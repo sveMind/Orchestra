@@ -1,7 +1,7 @@
 import { OrchestraPlugin } from '../../types';
 import fs from 'fs';
 import path from 'path';
-import { consultAgent, AgentRole } from '../../services/agentService';
+import { consultAgentRouted, AgentRole } from '../../services/agentService';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
@@ -50,7 +50,7 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
         let newCode = '';
 
         if (devAgentsCount === 1) {
-            const devResponse = await consultAgent(AgentRole.SOFTWARE_ENGINEER, devPrompt, '');
+            const devResponse = await consultAgentRouted(AgentRole.SOFTWARE_ENGINEER, devPrompt, '');
             
             // Parse for Side Issues
             const issueMatch = devResponse.match(/===ISSUE===([\s\S]*?)===END ISSUE===/);
@@ -75,7 +75,7 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
             const devPromises: Promise<string>[] = [];
             for (let i = 0; i < devAgentsCount; i++) {
                 const parallelPrompt = `${devPrompt}\n\nYou are Developer ${i + 1}. Provide a complete file implementation.`;
-                devPromises.push(consultAgent(AgentRole.SOFTWARE_ENGINEER, parallelPrompt, ''));
+                devPromises.push(consultAgentRouted(AgentRole.SOFTWARE_ENGINEER, parallelPrompt, ''));
             }
             const devResponses = await Promise.all(devPromises);
             const candidateCodes = devResponses
@@ -110,7 +110,7 @@ export const runDevCycle = async (task: string, filePath: string, issueNumber?: 
         console.log(`🕵️‍♀️ QA and Integration Agents are reviewing in parallel...`);
         
         const [qaResponse, integrationResponse] = await Promise.all([
-            consultAgent(
+            consultAgentRouted(
                 AgentRole.QA_ENGINEER,
                 `Review the following code implementation for the task: "${task}".
                 
@@ -125,7 +125,7 @@ ${currentCode}
 `,
                 ''
             ),
-            consultAgent(
+            consultAgentRouted(
                 AgentRole.ARCHITECT,
                 `You are acting as the Integration Agent. Review the following code for seamless component interaction and architectural consistency.
 

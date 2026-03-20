@@ -25,6 +25,16 @@ program
   .description('Orchestra: Automated pipeline tasks with plugin architecture.')
   .version(getPackageVersion());
 
+program
+  .helpOption('-h, --help', 'Display help for command')
+  .addHelpCommand('help [command]', 'Display help for command')
+  .showSuggestionAfterError(true)
+  .showHelpAfterError(true)
+  .addHelpText(
+    'after',
+    `\nEnvironment:\n  OPENAI_API_KEY    API key (OpenRouter uses this variable too)\n  AI_MODEL          Model name (recommended: openrouter/<model>)\n  AI_BASE_URL       Optional (defaults to OpenRouter when AI_MODEL starts with "openrouter/")\n`
+  );
+
 // --- Server Command ---
 program
   .command('server')
@@ -96,5 +106,9 @@ const loadPlugins = async () => {
 // Initialize and parse
 (async () => {
   await loadPlugins();
+  if (process.argv.length <= 2) {
+    program.outputHelp();
+    return;
+  }
   program.parse(process.argv);
 })();

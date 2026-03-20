@@ -42,13 +42,13 @@ Orchestra is built on a flexible plugin architecture, allowing for easy extensio
 You can install Orchestra globally to use it across any project:
 
 ```bash
-npm install -g orchestra
+npm install -g orchestra-ai-devops
 ```
 
 Or run it directly with `npx`:
 
 ```bash
-npx orchestra --help
+npx orchestra-ai-devops --help
 ```
 
 ### Option 2: Source Installation
@@ -79,13 +79,18 @@ npx orchestra --help
 Create a `.env` file in the root directory (or where you run Orchestra):
 
 ```env
-# Default: OpenAI
-OPENAI_API_KEY=sk-your-api-key
-
-# Option: OpenRouter (Cost Effective)
+# OpenRouter (Recommended)
 # OPENAI_API_KEY=sk-or-v1-your-openrouter-key
+# AI_MODEL=openrouter/auto
 # AI_BASE_URL=https://openrouter.ai/api/v1
-# AI_MODEL=deepseek/deepseek-coder:free
+
+# OpenAI (Alternative)
+# OPENAI_API_KEY=sk-your-openai-key
+# AI_MODEL=gpt-4o-mini
+
+# Agent role routing
+# ORCHESTRA_ROLE_ROUTING=auto   # default; Orchestra chooses best role per request
+# ORCHESTRA_ROLE_ROUTING=prefer # use each plugin’s preferred role
 
 GITHUB_TOKEN=your-github-token (Optional, for Issue creation)
 ```
@@ -153,9 +158,11 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 18
-      - run: npx orchestra auto
+      - run: npx orchestra-ai-devops auto
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AI_MODEL: openrouter/auto
+          AI_BASE_URL: https://openrouter.ai/api/v1
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 

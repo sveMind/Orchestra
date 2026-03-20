@@ -38,6 +38,27 @@ export const AGENT_ICONS: Record<AgentRole, string> = {
 
 export const getAgentIcon = (role: AgentRole): string => AGENT_ICONS[role] || '🤖';
 
+export const selectAgentRole = async (task: string, context: string = ''): Promise<AgentRole> => {
+    const roles = Object.values(AgentRole);
+    const shortContext = context.length > 2500 ? context.slice(0, 2500) : context;
+
+    const routerSystem = 'You are a routing system. Output strict JSON only.';
+    const routerPrompt = `Choose the best single role for the request.\n\nAllowed roles:\n${roles.map(r => `- ${r}`).join('\n')}\n\nRequest:\n${task}\n\nContext:\n${shortContext}\n\nOutput JSON: {"role":"<one allowed role>"}\n`;
+
+    try {
+        const raw = await generateCompletion(routerPrompt, routerSystem);
+        const match = raw.match(/\{[\s\S]*\}/);
+        const parsed = JSON.parse(match ? match[0] : raw) as { role?: string };
+        const chosen = parsed.role;
+        if (chosen && roles.includes(chosen as AgentRole)) {
+            return chosen as AgentRole;
+        }
+    } catch {
+    }
+
+    return AgentRole.SOFTWARE_ENGINEER;
+};
+
 export const consultAgent = async (role: AgentRole, task: string, context: string = ''): Promise<string> => {
     console.log(`🤖 Consulting Agent: ${role}...`);
     
@@ -53,4 +74,13 @@ export const consultAgent = async (role: AgentRole, task: string, context: strin
     `;
 
     return await generateCompletion(prompt, systemPrompt);
+};
+
+export const consultAgentRouted = async (preferredRole: AgentRole, task: string, context: string = ''): Promise<string> => {
+    const mode = (process.env.ORCHESTRA_ROLE_ROUTING || 'auto').toLowerCase();
+    if (mode === 'auto') {
+        const role = await selectAgentRole(task, context);
+        return await consultAgent(role, task, context);
+    }
+    return await consultAgent(preferredRole, task, context);
 };

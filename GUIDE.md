@@ -12,7 +12,7 @@ The easiest way to get started is to use the `init` command. This will automatic
 2.  Run the initialization command:
 
     ```bash
-    npx orchestra init
+    npx orchestra-ai-devops init
     ```
 
 ### What Happens?
@@ -66,14 +66,18 @@ jobs:
       - name: Run PR Review (on Pull Requests)
         if: github.event_name == 'pull_request'
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AI_MODEL: openrouter/auto
+          AI_BASE_URL: https://openrouter.ai/api/v1
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: orchestra pr-review ${{ github.event.pull_request.number }}
 
       - name: Run Auto-Pilot (on Push)
         if: github.event_name == 'push'
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AI_MODEL: openrouter/auto
+          AI_BASE_URL: https://openrouter.ai/api/v1
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: orchestra auto
 ```
@@ -109,33 +113,33 @@ You can run specific Orchestra agents for targeted tasks in your pipeline.
 Analyze code changes for quality, security, and bugs.
 
 ```bash
-npx orchestra pr-review <PR_NUMBER>
+npx orchestra-ai-devops pr-review <PR_NUMBER>
 ```
 
 ### 🛡️ Vulnerability Scan
 Scan specific files or the whole repo for security issues.
 
 ```bash
-npx orchestra vuln-scan ./src
+npx orchestra-ai-devops vuln-scan ./src
 ```
 
 ### 🧪 Unit Test Generation
 Automatically generate unit tests for a specific file.
 
 ```bash
-npx orchestra test-gen ./src/utils/helper.ts
+npx orchestra-ai-devops test-gen ./src/utils/helper.ts
 ```
 
 ### 📝 Documentation Generation
 Update README or generate API docs.
 
 ```bash
-npx orchestra doc-gen ./src
+npx orchestra-ai-devops doc-gen ./src
 ```
 
 ### ♾️ Continuous Mode
 Run Orchestra in an infinite loop to autonomously manage the project (e.g., in a long-running job).
 
 ```bash
-npx orchestra continuous ./README.md
+npx orchestra-ai-devops continuous ./README.md
 ```

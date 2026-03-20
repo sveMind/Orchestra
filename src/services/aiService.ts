@@ -9,11 +9,14 @@ dotenv.config();
 const provider = process.env.AI_PROVIDER || 'openai'; // 'openai' | 'gemini' | 'ollama'
 const apiKey = process.env.OPENAI_API_KEY;
 const googleApiKey = process.env.GOOGLE_API_KEY;
-const baseURL = process.env.OPENAI_BASE_URL || process.env.AI_BASE_URL || 'https://api.openai.com/v1';
+const model = process.env.AI_MODEL || '';
+const baseURL =
+  process.env.OPENAI_BASE_URL ||
+  process.env.AI_BASE_URL ||
+  (model.startsWith('openrouter/') ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1');
 const ollamaHost = process.env.OLLAMA_HOST || 'http://localhost:11434';
 
 // Ensure AI_MODEL is set
-const model = process.env.AI_MODEL || '';
 if (!model) {
     console.warn('Warning: AI_MODEL is not set. AI features will fail.');
 }

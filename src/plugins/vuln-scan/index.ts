@@ -1,7 +1,7 @@
 import { OrchestraPlugin } from '../../types';
 import fs from 'fs';
 import path from 'path';
-import { consultAgent, AgentRole } from '../../services/agentService';
+import { consultAgentRouted, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, checkoutBranch, buildBranchName } from '../../services/gitService';
@@ -26,7 +26,7 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
        contentToScan = fs.readFileSync(filePath, 'utf-8');
     }
 
-    const analysis = await consultAgent(
+    const analysis = await consultAgentRouted(
         AgentRole.SECURITY_ENGINEER, 
         'Analyze the provided code for security vulnerabilities. If issues found, list them clearly. If none, strictly say "NO_ISSUES".', 
         contentToScan
@@ -49,7 +49,7 @@ Do not include explanations or markdown formatting.`;
     for (let i = 0; i < devAgentsCount; i++) {
         const devTask = `${baseFixTask}\n\nYou are Developer ${i + 1}.`;
         devPromises.push(
-            consultAgent(
+            consultAgentRouted(
                 AgentRole.SOFTWARE_ENGINEER,
                 devTask,
                 `Original Code:\n${contentToScan}\n\nAnalysis:\n${analysis}`
@@ -66,7 +66,7 @@ Do not include explanations or markdown formatting.`;
 
     if (candidateFixes.length === 0) {
         console.warn('No valid fix candidates extracted from developer agents. Falling back to single-agent fix.');
-        const singleFix = await consultAgent(
+        const singleFix = await consultAgentRouted(
             AgentRole.SOFTWARE_ENGINEER,
             baseFixTask,
             `Original Code:\n${contentToScan}\n\nAnalysis:\n${analysis}`

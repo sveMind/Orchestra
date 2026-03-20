@@ -1,4 +1,4 @@
-import { AgentRole, consultAgent } from './agentService';
+import { AgentRole, consultAgentRouted } from './agentService';
 
 export type AgentExchange = {
     role: AgentRole;
@@ -9,7 +9,7 @@ export const runParallelAgents = async (
     exchanges: { role: AgentRole; task: string; context: string }[]
 ): Promise<AgentExchange[]> => {
     const promises = exchanges.map(async ({ role, task, context }) => {
-        const message = await consultAgent(role, task, context);
+        const message = await consultAgentRouted(role, task, context);
         return { role, message };
     });
     return Promise.all(promises);
@@ -31,7 +31,7 @@ export const runFacilitatedDiscussion = async (
 
     const context = `Agent Inputs:\n\n${transcript}`;
 
-    return await consultAgent(facilitator, task, context);
+    return await consultAgentRouted(facilitator, task, context);
 };
 
 export const runMergeCandidates = async (
@@ -49,6 +49,5 @@ export const runMergeCandidates = async (
 
     const task = `${taskDescription}\n\nImplementations:\n\n${formatted}`;
 
-    return await consultAgent(role, task, '');
+    return await consultAgentRouted(role, task, '');
 };
-

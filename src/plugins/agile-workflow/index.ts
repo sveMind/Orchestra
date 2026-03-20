@@ -1,5 +1,5 @@
 import { OrchestraPlugin } from '../../types';
-import { consultAgent, AgentRole } from '../../services/agentService';
+import { consultAgentRouted, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { runDevCycle } from '../dev-cycle';
 import path from 'path';
@@ -16,7 +16,7 @@ export const runAgileWorkflow = async (issueNumber: number, title: string, descr
     try {
         // Step 1: Product Manager - Clarify and Plan
         console.log('\n--- Step 1: Product Manager Planning ---');
-        const pmPlan = await consultAgent(
+        const pmPlan = await consultAgentRouted(
             AgentRole.PRODUCT_MANAGER,
             `Analyze the following issue and create a clear product plan.
             Issue: ${title}
@@ -35,7 +35,7 @@ export const runAgileWorkflow = async (issueNumber: number, title: string, descr
 
         // Step 2: Scrum Master - Task Breakdown
         console.log('\n--- Step 2: Scrum Master Task Breakdown ---');
-        const smTasks = await consultAgent(
+        const smTasks = await consultAgentRouted(
             AgentRole.SCRUM_MASTER,
             `Based on the PM's plan, break this down into technical tasks for the developer.
             

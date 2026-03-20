@@ -1,7 +1,7 @@
 import { OrchestraPlugin } from '../../types';
 import fs from 'fs';
 import path from 'path';
-import { consultAgent, AgentRole } from '../../services/agentService';
+import { consultAgentRouted, AgentRole } from '../../services/agentService';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
@@ -22,7 +22,7 @@ export const fixCode = async (filePath: string, instruction?: string): Promise<v
     const task = instruction || 'Fix any bugs, logical errors, or code smells in the following code.';
 
     // Step 1: Software Engineer analyzes and fixes
-    const fixSuggestion = await consultAgent(
+    const fixSuggestion = await consultAgentRouted(
         AgentRole.SOFTWARE_ENGINEER,
         `Task: ${task}
         
