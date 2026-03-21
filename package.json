@@ -52,7 +52,8 @@
     "express": "^5.2.1",
     "ollama": "^0.6.3",
     "openai": "^6.19.0",
-    "simple-git": "^3.30.0"
+    "simple-git": "^3.30.0",
+    "yaml": "^2.8.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

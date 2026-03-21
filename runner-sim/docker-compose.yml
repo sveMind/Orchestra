@@ -1,0 +1,14 @@
+services:
+  runner:
+    build:
+      context: ..
+      dockerfile: runner-sim/Dockerfile
+    working_dir: /app
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ..:/repo
+    environment:
+      - OPENAI_API_KEY
+      - AI_MODEL
+      - AI_BASE_URL
+      - GITHUB_TOKEN
