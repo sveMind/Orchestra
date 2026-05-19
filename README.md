@@ -42,6 +42,9 @@ npx orchestra-ai-devops create-plugin my-new-feature
 
 This will scaffold a new plugin in `src/plugins/my-new-feature`.
 
+
+
+
 For detailed instructions, see [PLUGINS.md](./PLUGINS.md).
 
 ## 📖 Setup & Pipeline Guide
@@ -155,6 +158,40 @@ docker run --rm \
 ```
 
 Orchestra automatically detects the CI environment (GitHub Actions, GitLab CI, Azure DevOps) and configures the appropriate VCS provider.
+
+---
+
+## 🏗️ SaaS Deployment (GitHub App)
+
+Orchestra can also run as a hosted service (like Snyk): you deploy one web server, users install your GitHub App, and GitHub sends events to your server via webhooks.
+
+### What gets deployed
+- A public HTTPS service running `orchestra server` (Express webhook server).
+- A workspace volume/disk for temporary repo clones.
+- Environment variables on the server (not in customer repos).
+
+### How it connects to GitHub
+1. You create a GitHub App and set its Webhook URL to your deployment (example: `https://your-domain.com/webhooks/github`).
+2. A user installs the GitHub App on one or more repos.
+3. GitHub delivers webhook events that include an `installation.id`.
+4. Orchestra mints a short-lived installation token and uses it to clone/push/open PRs as `Orchestra[bot]`.
+
+### Required server environment variables (GitHub App)
+- `GITHUB_APP_ID`
+- `GITHUB_APP_PRIVATE_KEY` (PEM; when stored as env, newlines are commonly encoded as `\n`)
+- `GITHUB_WEBHOOK_SECRET` (must match the GitHub App webhook secret)
+- AI config: `OPENAI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`
+
+### Do I need a separate login page?
+Not to get started.
+
+- If your SaaS behavior is “install the GitHub App and it starts working”, you can run without a UI. GitHub’s App installation flow is effectively the “authorization step”.
+- You need a login page/UI when you want per-tenant configuration (routing rules, model selection, billing, allow/deny lists, Jira connection, etc.). In that case the usual pattern is: user signs in with GitHub OAuth, then links/installs the GitHub App.
+
+### Is it coupled to the deployed application?
+Yes, by design:
+- Your GitHub App’s webhook URL points at your deployed server.
+- If your server is down or the URL changes, events won’t be delivered until it’s restored/updated.
 
 ---
 

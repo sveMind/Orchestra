@@ -6,9 +6,21 @@ export const setWorkingDirectory = (path: string) => {
     git = simpleGit(path);
 };
 
-export const cloneRepo = async (repoUrl: string, localPath: string): Promise<void> => {
+type CloneOptions = {
+    token?: string;
+};
+
+const buildAuthedRepoUrl = (repoUrl: string, token: string): string => {
+    const url = new URL(repoUrl);
+    url.username = 'x-access-token';
+    url.password = token;
+    return url.toString();
+};
+
+export const cloneRepo = async (repoUrl: string, localPath: string, options: CloneOptions = {}): Promise<void> => {
     try {
-        await simpleGit().clone(repoUrl, localPath);
+        const urlToClone = options.token ? buildAuthedRepoUrl(repoUrl, options.token) : repoUrl;
+        await simpleGit().clone(urlToClone, localPath);
         git = simpleGit(localPath);
     } catch (error) {
         console.error(`Error cloning repo ${repoUrl}:`, error);

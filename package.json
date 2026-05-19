@@ -43,6 +43,7 @@
   "homepage": "https://github.com/sveMind/Orchestra#readme",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@octokit/auth-app": "^8.1.0",
     "@octokit/rest": "^19.0.13",
     "axios": "^1.13.5",
     "azure-devops-node-api": "^15.1.2",
