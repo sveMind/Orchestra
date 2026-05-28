@@ -8,6 +8,7 @@ import { manageProject } from '../project-manager';
 import fs from 'fs';
 import path from 'path';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
+import { extractJsonArrayFromText } from '../../utils/jsonUtils';
 
 const runAutoPilot = async (): Promise<void> => {
   console.log('🚀 Engaging AI-Driven Auto-Pilot...');
@@ -64,8 +65,8 @@ const runAutoPilot = async (): Promise<void> => {
 
     let plan: string[] = [];
     try {
-        const jsonMatch = planRaw.match(/\[.*\]/s);
-        plan = JSON.parse(jsonMatch ? jsonMatch[0] : '[]');
+        const parsed = extractJsonArrayFromText(planRaw) || [];
+        plan = parsed.filter((v): v is string => typeof v === 'string');
     } catch (e) {
         console.warn(`[${fileName}] Failed to parse AI plan, defaulting to safety checks based on extension.`);
         // Fallback to extension based logic if AI fails

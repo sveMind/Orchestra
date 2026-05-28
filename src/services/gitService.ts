@@ -75,6 +75,33 @@ export const getDiff = async (filePath: string): Promise<string> => {
     }
 }
 
+export const getHeadSha = async (): Promise<string> => {
+  try {
+    const sha = await git.raw(['rev-parse', 'HEAD']);
+    return String(sha || '').trim();
+  } catch {
+    return '';
+  }
+};
+
+export const getMergeBase = async (refA: string, refB: string): Promise<string> => {
+  try {
+    const sha = await git.raw(['merge-base', refA, refB]);
+    return String(sha || '').trim();
+  } catch {
+    return '';
+  }
+};
+
+export const remoteBranchExists = async (branchName: string): Promise<boolean> => {
+  try {
+    await git.raw(['show-ref', '--verify', `refs/remotes/origin/${branchName}`]);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const slugifyBranchPart = (input: string): string => {
     return input
         .toLowerCase()
@@ -115,6 +142,46 @@ export const checkoutBranch = async (branchName: string): Promise<void> => {
     }
 };
 
+export const fetchOrigin = async (): Promise<void> => {
+    try {
+        await git.fetch(['origin', '--prune']);
+    } catch (error) {
+        console.error('Error fetching from origin:', error);
+        throw error;
+    }
+};
+
+export const createBranchFrom = async (branchName: string, startPoint: string): Promise<void> => {
+    try {
+        await git.checkoutBranch(branchName, startPoint);
+        console.log(`Created and checked out branch: ${branchName} (from ${startPoint})`);
+    } catch (error) {
+        console.error(`Error creating branch ${branchName} from ${startPoint}:`, error);
+        throw error;
+    }
+};
+
+export const getCurrentBranch = async (): Promise<string> => {
+    try {
+        const info = await git.branch();
+        return info.current;
+    } catch (error) {
+        console.error('Error reading current branch:', error);
+        return '';
+    }
+};
+
+export const ensureCommitIdentity = async (name: string, email: string): Promise<void> => {
+    try {
+        const status = await git.status();
+        if (status && status.current) {
+            await git.addConfig('user.name', name);
+            await git.addConfig('user.email', email);
+        }
+    } catch {
+    }
+};
+
 export const commitChanges = async (message: string, files: string[] = ['.']): Promise<void> => {
     try {
         await git.add(files);
@@ -134,4 +201,14 @@ export const pushChanges = async (branchName: string): Promise<void> => {
         console.error(`Error pushing changes to ${branchName}:`, error);
         throw error;
     }
+};
+
+export const pushChangesForceWithLease = async (branchName: string): Promise<void> => {
+  try {
+    await git.push('origin', branchName, { '--set-upstream': null, '--force-with-lease': null });
+    console.log(`Force-pushed changes to ${branchName}`);
+  } catch (error) {
+    console.error(`Error force-pushing changes to ${branchName}:`, error);
+    throw error;
+  }
 };

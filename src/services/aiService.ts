@@ -15,6 +15,33 @@ const baseURL =
   process.env.AI_BASE_URL ||
   (model.startsWith('openrouter/') ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1');
 const ollamaHost = process.env.OLLAMA_HOST || 'http://localhost:11434';
+const orchestraAppName = process.env.ORCHESTRA_APP_NAME || 'Orchestra';
+const orchestraAppUrl = process.env.ORCHESTRA_APP_URL || '';
+const orchestraSource = process.env.ORCHESTRA_SOURCE || '';
+const orchestraDebug = String(process.env.ORCHESTRA_DEBUG || '').trim() === '1';
+
+const getErrorMessage = (error: unknown): string => {
+    if (!error) return 'Unknown error';
+    if (typeof error === 'string') return error;
+    if (error instanceof Error && error.message) return error.message;
+    const anyErr = error as any;
+    const nested = anyErr?.error?.message;
+    if (nested && typeof nested === 'string') return nested;
+    try {
+        return JSON.stringify(error);
+    } catch {
+        return 'Unknown error';
+    }
+};
+
+const getErrorStatus = (error: unknown): number | undefined => {
+    const anyErr = error as any;
+    const s = anyErr?.status;
+    if (typeof s === 'number') return s;
+    const c = anyErr?.code;
+    if (typeof c === 'number') return c;
+    return undefined;
+};
 
 // Ensure AI_MODEL is set
 if (!model) {
@@ -39,9 +66,16 @@ if (provider === 'gemini') {
 } else {
     // Default to OpenAI
     if (apiKey) {
+        const defaultHeaders: Record<string, string> = {};
+        if (baseURL.includes('openrouter')) {
+            if (orchestraAppUrl) defaultHeaders['HTTP-Referer'] = orchestraAppUrl;
+            if (orchestraAppName) defaultHeaders['X-Title'] = orchestraAppName;
+        }
+
         openai = new OpenAI({
             apiKey: apiKey,
             baseURL: baseURL,
+            defaultHeaders,
         });
         if (baseURL.includes('openrouter')) {
             console.log(`🔌 Connected to OpenRouter (Model: ${model})`);
@@ -65,23 +99,26 @@ export const generateCompletion = async (prompt: string, systemPrompt: string = 
         if (provider === 'gemini' && genAI) {
             const geminiModel = genAI.getGenerativeModel({ model: model });
             // Gemini doesn't have system prompts in the same way as GPT, but we can prepend it
-            const fullPrompt = `${systemPrompt}\n\n${prompt}`;
+            const effectiveSystem = orchestraSource ? `${systemPrompt}\n\nRequest Source: ${orchestraSource}` : systemPrompt;
+            const fullPrompt = `${effectiveSystem}\n\n${prompt}`;
             const result = await geminiModel.generateContent(fullPrompt);
             const response = await result.response;
             return response.text();
         } else if (provider === 'ollama' && ollama) {
+            const effectiveSystem = orchestraSource ? `${systemPrompt}\n\nRequest Source: ${orchestraSource}` : systemPrompt;
             const response = await ollama.chat({
                 model: model,
                 messages: [
-                    { role: 'system', content: systemPrompt },
+                    { role: 'system', content: effectiveSystem },
                     { role: 'user', content: prompt },
                 ],
             });
             return response.message.content;
         } else if (openai) {
+            const effectiveSystem = orchestraSource ? `${systemPrompt}\n\nRequest Source: ${orchestraSource}` : systemPrompt;
             const completion = await openai.chat.completions.create({
                 messages: [
-                    { role: 'system', content: systemPrompt },
+                    { role: 'system', content: effectiveSystem },
                     { role: 'user', content: prompt },
                 ],
                 model: model,
@@ -97,7 +134,21 @@ export const generateCompletion = async (prompt: string, systemPrompt: string = 
             throw new Error('No AI provider initialized.');
         }
     } catch (error) {
-        console.error(`Error calling ${provider}:`, error);
-        throw error;
+        const message = getErrorMessage(error);
+        const status = getErrorStatus(error);
+
+        if (orchestraDebug) {
+            console.error(`Error calling ${provider}:`, error);
+        } else {
+            console.error(
+                `Error calling ${provider}${status ? ` (status ${status})` : ''}: ${message}`
+            );
+        }
+
+        const sanitized = new Error(
+            `AI request failed (${provider}${status ? `, status ${status}` : ''}): ${message}`
+        ) as any;
+        sanitized.cause = error;
+        throw sanitized;
     }
 };

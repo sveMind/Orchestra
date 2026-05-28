@@ -99,6 +99,11 @@ Create a `.env` file in the root directory (or where you run Orchestra):
 # AI_MODEL=openrouter/auto
 # AI_BASE_URL=https://openrouter.ai/api/v1
 
+# Optional: identify requests as coming from this tool (useful in OpenRouter analytics)
+# ORCHESTRA_APP_NAME=Orchestra
+# ORCHESTRA_APP_URL=https://github.com/your-org/your-repo
+# ORCHESTRA_SOURCE=ci:github-actions
+
 # OpenAI (Alternative)
 # OPENAI_API_KEY=sk-your-openai-key
 # AI_MODEL=gpt-4o-mini
@@ -127,20 +132,65 @@ npm start -- auto
 Orchestra is designed to run in any CI/CD pipeline.
 
 #### GitHub Actions
-Use the provided action definition:
+You can run Orchestra in GitHub Actions via the NPM package (recommended), or via a published GitHub Action.
+
+**Option A: NPM package (recommended)**
 
 ```yaml
 steps:
-  - uses: actions/checkout@v3
-  - uses: ./path/to/orchestra/action # If local
-    # OR if published: uses: sveMind/Orchestra@v1
+  - uses: actions/checkout@v4
     with:
-      command: 'pr-review'
-      args: '${{ github.event.pull_request.number }}'
-      openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
-      ai_model: openrouter/auto
-      github_token: ${{ secrets.GITHUB_TOKEN }}
+      fetch-depth: 0
+  - uses: actions/setup-node@v4
+    with:
+      node-version: '20'
+  - run: npx orchestra-ai-devops pr-review ${{ github.event.pull_request.number }}
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      AI_MODEL: openrouter/auto
+      AI_BASE_URL: https://openrouter.ai/api/v1
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+#### Documentation Agent (doc-gen) with OpenRouter
+
+Run the documentation agent in CI to update repo docs only when needed. For the repo-wide mode, pass the repo root path (`.`). Default mode is `changed` (skips when there are no changes).
+
+If you use GitHub Environments, you can store `OPENROUTER_API_KEY` in an environment named `Orchestra` and set `environment: Orchestra` on the job.
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+    with:
+      fetch-depth: 0
+  - uses: actions/setup-node@v4
+    with:
+      node-version: '20'
+  - run: npx orchestra-ai-devops doc-gen .
+    env:
+      ORCHESTRA_ROLE_ROUTING: prefer
+      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      AI_MODEL: openrouter/auto
+      AI_BASE_URL: https://openrouter.ai/api/v1
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+To generate a best-practice documentation structure (creates/standardizes docs like Requirements, Environment, Docker and flags duplicates), use:
+
+```yaml
+- run: npx orchestra-ai-devops doc-gen . structure
+```
+
+If you want CI to fail when documentation updates were produced (instead of silently changing files), add:
+
+```yaml
+- name: Fail if docs changed
+  run: git diff --exit-code
+```
+
+**Option B: GitHub Action**
+
+If you publish this repo as a GitHub Action, `owner/repo@v1` refers to the git ref (tag/branch) for that action and uses its `action.yml`.
 
 #### GitLab CI / Azure Pipelines / Jenkins
 Use the Docker image for universal compatibility:

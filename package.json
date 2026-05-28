@@ -1,6 +1,6 @@
 {
   "name": "orchestra-ai-devops",
-  "version": "1.0.0",
+  "version": "1.0.19",
   "description": "Orchestra is an AI-driven DevOps assistant with a modular plugin architecture.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -26,6 +26,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sveMind/Orchestra.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "keywords": [
     "devops",
