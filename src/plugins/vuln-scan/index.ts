@@ -1,12 +1,166 @@
 import { OrchestraPlugin } from '../../types';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { consultAgentRouted, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { extractCodeBlock } from '../../utils/codeExtractor';
-import { createBranch, commitChanges, pushChanges, checkoutBranch, buildBranchName } from '../../services/gitService';
+import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
 import { runMergeCandidates } from '../../services/agentOrchestrator';
 import { inferLanguageFromExtension } from '../../services/languageUtils';
+
+import { readCiPrContext } from '../../services/ciContext';
+
+const walkDir = (dir: string, ignored: Set<string>, exts: Set<string>, filesList: string[] = []) => {
+  if (filesList.length > 50) return filesList; // hard limit to avoid token explosion
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return filesList;
+  }
+
+  for (const entry of entries) {
+    if (filesList.length > 50) break;
+    if (entry.name.startsWith('.')) continue;
+    if (ignored.has(entry.name)) continue;
+
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkDir(fullPath, ignored, exts, filesList);
+    } else if (entry.isFile()) {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (exts.has(ext)) {
+        filesList.push(fullPath);
+      }
+    }
+  }
+  return filesList;
+};
+
+export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: string = 'report'): Promise<void> => {
+  console.log(`\n🕵️‍♂️ Starting comprehensive security scan on repository: ${dirPath}\n`);
+
+  let reportSections: string[] = ['# Security & Vulnerability Report\n'];
+  reportSections.push(`*Scan Date: ${new Date().toISOString().split('T')[0]}*\n`);
+
+  let hasIssues = false;
+  let summary = '';
+
+  // 1. Dependency Check (npm audit for lock files)
+  const packageJsonPath = path.join(dirPath, 'package.json');
+  if (fs.existsSync(packageJsonPath)) {
+    console.log('📦 Scanning package dependencies (npm audit)...');
+    let auditOutput = '';
+    try {
+      auditOutput = execSync('npm audit --json', { cwd: dirPath, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    } catch (err: any) {
+      auditOutput = err.stdout ? err.stdout.toString() : '';
+    }
+
+    if (auditOutput) {
+      console.log('🤖 Analyzing dependency vulnerabilities...');
+      const depAnalysis = await consultAgentRouted(
+        AgentRole.SECURITY_ENGINEER,
+        'You are analyzing the output of `npm audit --json`. Summarize the key vulnerabilities, the affected packages, and provide concrete steps to fix them (e.g. commands to run). If there are no vulnerabilities or the JSON is empty/invalid, state "No dependency vulnerabilities found." Format your response cleanly in Markdown.',
+        auditOutput.substring(0, 20000)
+      );
+      reportSections.push('## Dependency Vulnerabilities\n');
+      reportSections.push(depAnalysis + '\n');
+      if (!depAnalysis.toLowerCase().includes('no dependency vulnerabilities found')) {
+        hasIssues = true;
+        summary += 'Dependency vulnerabilities detected.\n';
+      }
+    } else {
+      reportSections.push('## Dependency Vulnerabilities\n\nNo `npm audit` output available or no vulnerabilities found.\n');
+    }
+  } else {
+    reportSections.push('## Dependency Vulnerabilities\n\nNo `package.json` found. Dependency scanning skipped.\n');
+  }
+
+  // 2. Codebase Scan for Bad Practices
+  console.log('🔎 Scanning codebase for bad practices and security flaws...');
+  const ignored = new Set(['node_modules', 'dist', 'build', 'coverage', 'out', 'public']);
+  const exts = new Set(['.js', '.ts', '.jsx', '.tsx', '.py', '.go', '.java', '.cs']);
+  const sourceFiles = walkDir(dirPath, ignored, exts);
+
+  if (sourceFiles.length === 0) {
+    reportSections.push('## Codebase Security Analysis\n\nNo source files found to scan.\n');
+  } else {
+    console.log(`Found ${sourceFiles.length} source files to sample.`);
+    
+    let combinedContent = '';
+    let charsUsed = 0;
+    const MAX_CHARS = 40000;
+
+    for (const file of sourceFiles) {
+      try {
+        const content = fs.readFileSync(file, 'utf-8');
+        if (charsUsed + content.length > MAX_CHARS) {
+          combinedContent += `\n\n--- ${path.relative(dirPath, file)} ---\n[Truncated due to size limits]`;
+          break;
+        }
+        combinedContent += `\n\n--- ${path.relative(dirPath, file)} ---\n${content}`;
+        charsUsed += content.length;
+      } catch {
+        continue;
+      }
+    }
+
+    console.log('🤖 Analyzing source code...');
+    const codeAnalysis = await consultAgentRouted(
+      AgentRole.SECURITY_ENGINEER,
+      'You are a Senior Security Engineer. Review the following codebase sample for security vulnerabilities (e.g. SQL Injection, XSS, hardcoded secrets, unsafe evals) and bad coding practices. Provide a structured markdown report identifying the file, the issue, the severity, and a recommendation on how to fix it. If no issues are found, explicitly state "No significant security issues found in the scanned files."',
+      combinedContent
+    );
+
+    reportSections.push('## Codebase Security Analysis\n');
+    reportSections.push(codeAnalysis + '\n');
+    if (!codeAnalysis.toLowerCase().includes('no significant security issues found')) {
+      hasIssues = true;
+      summary += 'Codebase vulnerabilities detected.\n';
+    }
+  }
+
+  // 3. Output Handling based on mode
+  const finalReport = reportSections.join('\n');
+  
+  if (mode === 'report' || !hasIssues) {
+    const reportPath = path.join(dirPath, 'SECURITY_REPORT.md');
+    fs.writeFileSync(reportPath, finalReport);
+    console.log(`\n✅ Security scan complete! Report generated at: ${reportPath}`);
+    if (!hasIssues) console.log('No significant issues found. Modes issue/pr/comment skipped.');
+    return;
+  }
+
+  const vcs = VcsFactory.getProvider();
+  
+  if (mode === 'issue') {
+    console.log('Creating security issue...');
+    const issueUrl = await vcs.createIssue('Security Vulnerability Scan Results', finalReport, ['security', 'orchestra', 'auto-scan']);
+    if (issueUrl) console.log(`✅ Issue created successfully: ${issueUrl}`);
+    else console.log('❌ Failed to create issue.');
+  } 
+  else if (mode === 'comment') {
+    const prContext = readCiPrContext();
+    if (prContext) {
+      console.log(`Commenting on PR #${prContext.prNumber}...`);
+      await vcs.addComment(prContext.prNumber, `### 🕵️‍♂️ Orchestra Security Scan\n\n${finalReport}`);
+      console.log('✅ Comment posted to PR.');
+    } else {
+      console.log('❌ Mode is "comment" but no CI PR context found. Writing to local report instead.');
+      const reportPath = path.join(dirPath, 'SECURITY_REPORT.md');
+      fs.writeFileSync(reportPath, finalReport);
+    }
+  }
+  else if (mode === 'pr') {
+    // We would need to implement an auto-fix loop for all files here, but since this is a repo-wide scan, 
+    // it's safer to just create an issue if 'pr' is selected but we didn't do single-file fixes.
+    console.log('Mode "pr" selected for full repo scan. This mode is better suited for single-file scans. Creating an issue with the report instead.');
+    const issueUrl = await vcs.createIssue('Security Vulnerability Scan Results', finalReport, ['security', 'orchestra', 'auto-scan']);
+    if (issueUrl) console.log(`✅ Issue created successfully: ${issueUrl}`);
+  }
+};
 
 export const scanForVulnerabilities = async (filePath: string, applyFix: boolean = false): Promise<void> => {
   console.log(`Scanning for vulnerabilities in: ${filePath}`);
@@ -17,14 +171,13 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
       return;
     }
 
-    let contentToScan = '';
-    const codeLanguage = inferLanguageFromExtension(filePath);
     if (fs.lstatSync(filePath).isDirectory()) {
-       console.warn('Directory scanning is experimental. Please point to a specific file.');
+       await scanDirectoryForVulnerabilities(filePath);
        return;
-    } else {
-       contentToScan = fs.readFileSync(filePath, 'utf-8');
     }
+
+    let contentToScan = fs.readFileSync(filePath, 'utf-8');
+    const codeLanguage = inferLanguageFromExtension(filePath);
 
     const analysis = await consultAgentRouted(
         AgentRole.SECURITY_ENGINEER, 
@@ -87,10 +240,6 @@ Do not include explanations or markdown formatting.`;
     console.log('\n--- Suggested Fix ---\n');
     console.log(fixSuggestion);
 
-    // Step 3: Apply Fix (if requested or default behavior)
-    // For now, we'll check if the user passed a flag or if we just want to do it safely.
-    // The user asked "write a fix", so let's do it with a backup.
-    
     const fixedCode = extractCodeBlock(fixSuggestion) || fixSuggestion;
     if (fixedCode) {
         const backupPath = `${filePath}.bak`;
@@ -103,7 +252,6 @@ Do not include explanations or markdown formatting.`;
         console.warn('Could not extract code from AI response. Fix not applied automatically.');
     }
 
-    // Step 4: Create Issue
     const issueTitle = `Security Vulnerability Detected in ${filePath.split('/').pop()}`;
     const issueBody = `
 ## Vulnerability Report
@@ -112,9 +260,9 @@ ${analysis}
 ## Applied Fix
 The following changes were applied automatically by Orchestra:
 
-
+\`\`\`${codeLanguage}
 ${fixedCode || fixSuggestion}
-
+\`\`\`
 
 *Reported by Orchestra Security Agent*
     `;
@@ -126,7 +274,6 @@ ${fixedCode || fixSuggestion}
     if (issueUrl) {
         console.log(`Issue created successfully: ${issueUrl}`);
         
-        // Step 5: Create Branch and PR
         if (fixedCode) {
             const fileName = filePath.split('/').pop();
             const branchName = buildBranchName('fix-security', fileName || '');
@@ -140,16 +287,13 @@ ${fixedCode || fixSuggestion}
                 const prUrl = await vcs.createPullRequest(
                     `Security Fix: ${fileName}`,
                     branchName,
-                    'main', // Assuming main is the base branch
+                    'main',
                     `Fixes ${issueUrl}\n\nAutomated security fix applied by Orchestra.`
                 );
                 
                 if (prUrl) {
                     console.log(`Pull Request created successfully: ${prUrl}`);
                 }
-                
-                // Switch back to main? Or stay? In CI it doesn't matter much.
-                // await checkoutBranch('main'); 
             } catch (gitError) {
                 console.error('Git workflow failed (might be running locally without upstream):', gitError);
             }
@@ -165,13 +309,21 @@ ${fixedCode || fixSuggestion}
 
 const plugin: OrchestraPlugin = {
   name: 'Vulnerability Scanner',
-  description: 'Scan for vulnerabilities using AI and apply fixes',
+  description: 'Scan codebase and lock files for vulnerabilities and bad practices.',
   command: 'vuln-scan',
   args: [
-    { name: 'path', description: 'Path to the code file or directory', required: true }
+    { name: 'path', description: 'Path to the code file or directory (defaults to current directory)', required: false },
+    { name: 'mode', description: 'Output mode: report | issue | comment | pr (default: report)', required: false }
   ],
-  action: async (path: string) => {
-    await scanForVulnerabilities(path, true);
+  action: async (targetPath?: string, targetMode?: string) => {
+    const p = targetPath && typeof targetPath === 'string' ? targetPath : process.cwd();
+    const mode = targetMode && typeof targetMode === 'string' ? targetMode.toLowerCase() : 'report';
+    
+    if (fs.existsSync(p) && fs.lstatSync(p).isDirectory()) {
+      await scanDirectoryForVulnerabilities(p, mode);
+    } else {
+      await scanForVulnerabilities(p, true);
+    }
   }
 };
 
