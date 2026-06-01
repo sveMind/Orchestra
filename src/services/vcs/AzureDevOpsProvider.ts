@@ -121,6 +121,27 @@ export class AzureDevOpsProvider implements VcsProvider {
          }
     }
 
+    async findIssueByTitle(title: string): Promise<number | null> {
+         if (!this.isConfigured()) return null;
+         await this.init();
+         try {
+             const safeTitle = title.replace(/'/g, "''"); // escape single quotes for WIQL
+             const wiql = `SELECT [System.Id], [System.Title] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.State] NOT IN ('Closed', 'Done', 'Removed', 'Cut') AND [System.Title] = '${safeTitle}'`;
+             
+             const result = await this.workItemApi?.queryByWiql({ query: wiql }, { project: this.project });
+             
+             if (!result?.workItems || result.workItems.length === 0) {
+                 return null;
+             }
+             
+             // Exact match via WIQL should be sufficient, but we can return the first match
+             return result.workItems[0].id || null;
+         } catch (error) {
+             console.warn('Error finding Azure Work Item by title:', error);
+             return null;
+         }
+    }
+
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
         if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
         await this.init();

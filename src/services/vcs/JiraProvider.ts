@@ -143,6 +143,29 @@ export class JiraProvider implements IssueProvider {
         }
     }
 
+    async findIssueByTitle(title: string): Promise<number | null> {
+        if (!this.isConfigured()) return null;
+        try {
+            const safeTitle = title.replace(/"/g, '\\"');
+            const jql = `project = ${this.projectKey} AND statusCategory != Done AND summary ~ "\\"${safeTitle}\\""`;
+            const response = await this.client.get(`/search`, {
+                params: {
+                    jql: jql,
+                    fields: 'summary',
+                    maxResults: 5
+                }
+            });
+            const exactMatch = (response.data.issues || []).find((i: any) => i.fields.summary.trim().toLowerCase() === title.trim().toLowerCase());
+            if (exactMatch) {
+                return parseInt(exactMatch.key.split('-')[1], 10) || null;
+            }
+            return null;
+        } catch (error) {
+            console.warn('Error finding Jira issue by title:', error);
+            return null;
+        }
+    }
+
     async addLabels(issueNumber: number, labels: string[]): Promise<void> {
         const issueKey = `${this.projectKey}-${issueNumber}`;
         if (!this.isConfigured()) throw new Error('Jira not configured. Missing JIRA_HOST, JIRA_EMAIL, JIRA_API_TOKEN, or JIRA_PROJECT_KEY.');

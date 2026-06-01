@@ -75,6 +75,20 @@ export class OrchestraProvider implements VcsProvider {
         }
     }
 
+    async findIssueByTitle(title: string): Promise<number | null> {
+        if (!this.isConfigured()) return null;
+        try {
+            const response = await this.client.get(`/projects/${this.projectId}/issues`, {
+                params: { state: 'open', search: title }
+            });
+            const exactMatch = response.data.find((i: any) => i.title.trim().toLowerCase() === title.trim().toLowerCase());
+            return exactMatch ? exactMatch.number : null;
+        } catch (error) {
+            console.warn('Error finding Orchestra issue by title:', error);
+            return null;
+        }
+    }
+
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
         if (!this.isConfigured()) throw new Error('Orchestra not configured. Missing ORCHESTRA_TOKEN.');
         try {

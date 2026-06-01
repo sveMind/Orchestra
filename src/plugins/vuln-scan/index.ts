@@ -136,10 +136,19 @@ export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: str
   const vcs = VcsFactory.getProvider();
   
   if (mode === 'issue') {
-    console.log('Creating security issue...');
-    const issueUrl = await vcs.createIssue('Security Vulnerability Scan Results', finalReport, ['security', 'orchestra', 'auto-scan']);
-    if (issueUrl) console.log(`✅ Issue created successfully: ${issueUrl}`);
-    else console.log('❌ Failed to create issue.');
+    const title = 'Security Vulnerability Scan Results';
+    const existingIssue = await vcs.findIssueByTitle(title);
+    
+    if (existingIssue) {
+      console.log(`ℹ️ An open issue already exists for security scans (#${existingIssue}). Adding report as a comment instead.`);
+      await vcs.addComment(existingIssue, `### 🕵️‍♂️ Orchestra Security Scan Update\n\n${finalReport}`);
+      console.log('✅ Comment added to existing issue.');
+    } else {
+      console.log('Creating security issue...');
+      const issueUrl = await vcs.createIssue(title, finalReport, ['security', 'orchestra', 'auto-scan']);
+      if (issueUrl) console.log(`✅ Issue created successfully: ${issueUrl}`);
+      else console.log('❌ Failed to create issue.');
+    }
   } 
   else if (mode === 'comment') {
     const prContext = readCiPrContext();
@@ -154,11 +163,17 @@ export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: str
     }
   }
   else if (mode === 'pr') {
-    // We would need to implement an auto-fix loop for all files here, but since this is a repo-wide scan, 
-    // it's safer to just create an issue if 'pr' is selected but we didn't do single-file fixes.
-    console.log('Mode "pr" selected for full repo scan. This mode is better suited for single-file scans. Creating an issue with the report instead.');
-    const issueUrl = await vcs.createIssue('Security Vulnerability Scan Results', finalReport, ['security', 'orchestra', 'auto-scan']);
-    if (issueUrl) console.log(`✅ Issue created successfully: ${issueUrl}`);
+    const title = 'Security Vulnerability Scan Results';
+    console.log('Mode "pr" selected for full repo scan. This mode is better suited for single-file scans. Attempting to report issue...');
+    const existingIssue = await vcs.findIssueByTitle(title);
+    
+    if (existingIssue) {
+      console.log(`ℹ️ An open issue already exists for security scans (#${existingIssue}). Adding report as a comment instead.`);
+      await vcs.addComment(existingIssue, `### 🕵️‍♂️ Orchestra Security Scan Update\n\n${finalReport}`);
+    } else {
+      const issueUrl = await vcs.createIssue(title, finalReport, ['security', 'orchestra', 'auto-scan']);
+      if (issueUrl) console.log(`✅ Issue created successfully: ${issueUrl}`);
+    }
   }
 };
 
@@ -269,37 +284,43 @@ ${fixedCode || fixSuggestion}
 
     console.log('\nCreating Issue...');
     const vcs = VcsFactory.getProvider();
-    const issueUrl = await vcs.createIssue(issueTitle, issueBody, ['security', 'orchestra', 'auto-fixed']);
     
-    if (issueUrl) {
-        console.log(`Issue created successfully: ${issueUrl}`);
-        
-        if (fixedCode) {
-            const fileName = filePath.split('/').pop();
-            const branchName = buildBranchName('fix-security', fileName || '');
-            
-            try {
-                console.log(`\nInitiating Git workflow for fix...`);
-                await createBranch(branchName);
-                await commitChanges(`fix(security): resolve vulnerabilities in ${fileName}`, [filePath]);
-                await pushChanges(branchName);
-                
-                const prUrl = await vcs.createPullRequest(
-                    `Security Fix: ${fileName}`,
-                    branchName,
-                    'main',
-                    `Fixes ${issueUrl}\n\nAutomated security fix applied by Orchestra.`
-                );
-                
-                if (prUrl) {
-                    console.log(`Pull Request created successfully: ${prUrl}`);
-                }
-            } catch (gitError) {
-                console.error('Git workflow failed (might be running locally without upstream):', gitError);
-            }
-        }
+    let issueUrl: string | null = null;
+    const existingIssueId = await vcs.findIssueByTitle(issueTitle);
+    
+    if (existingIssueId) {
+       console.log(`ℹ️ Issue already exists (#${existingIssueId}). Adding report as comment.`);
+       await vcs.addComment(existingIssueId, `### Security Fix Applied\n\n${issueBody}`);
+       // Simulated issue URL for the log
+       issueUrl = `Issue #${existingIssueId}`;
     } else {
-        console.log('Failed to create issue (check API configuration).');
+       issueUrl = await vcs.createIssue(issueTitle, issueBody, ['security', 'orchestra', 'auto-fixed']);
+       if (issueUrl) console.log(`Issue created successfully: ${issueUrl}`);
+    }
+        
+    if (fixedCode) {
+        const fileName = filePath.split('/').pop();
+        const branchName = buildBranchName('fix-security', fileName || '');
+        
+        try {
+            console.log(`\nInitiating Git workflow for fix...`);
+            await createBranch(branchName);
+            await commitChanges(`fix(security): resolve vulnerabilities in ${fileName}`, [filePath]);
+            await pushChanges(branchName);
+            
+            const prUrl = await vcs.createPullRequest(
+                `Security Fix: ${fileName}`,
+                branchName,
+                'main',
+                `Fixes ${issueUrl}\n\nAutomated security fix applied by Orchestra.`
+            );
+            
+            if (prUrl) {
+                console.log(`Pull Request created successfully: ${prUrl}`);
+            }
+        } catch (gitError) {
+            console.error('Git workflow failed (might be running locally without upstream):', gitError);
+        }
     }
 
   } catch (error) {

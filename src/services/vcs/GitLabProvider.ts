@@ -75,6 +75,28 @@ export class GitLabProvider implements VcsProvider {
         }
     }
 
+    async findIssueByTitle(title: string): Promise<number | null> {
+        if (!this.isConfigured()) return null;
+        try {
+            const response = await this.client.get(`/projects/${this.projectId}/issues`, {
+                params: { 
+                    state: 'opened',
+                    search: title,
+                    in: 'title'
+                }
+            });
+            
+            const exactMatch = response.data.find((i: any) => i.title.trim().toLowerCase() === title.trim().toLowerCase());
+            if (exactMatch) {
+                return exactMatch.iid;
+            }
+            return null;
+        } catch (error) {
+            console.warn('Error finding GitLab issue by title:', error);
+            return null;
+        }
+    }
+
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
         if (!this.isConfigured()) throw new Error('GitLab not configured.');
         try {

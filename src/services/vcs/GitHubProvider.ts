@@ -86,6 +86,28 @@ export class GitHubProvider implements VcsProvider {
         }
     }
 
+    async findIssueByTitle(title: string): Promise<number | null> {
+        if (!this.isConfigured()) return null;
+        try {
+            // First search within open issues of this repo
+            const q = `repo:${this.owner}/${this.repo} type:issue state:open in:title "${title}"`;
+            const { data } = await this.octokit.search.issuesAndPullRequests({
+                q,
+                per_page: 5
+            });
+            
+            // Do an exact title match check locally just to be safe
+            const exactMatch = data.items.find(i => i.title.trim().toLowerCase() === title.trim().toLowerCase());
+            if (exactMatch) {
+                return exactMatch.number;
+            }
+            return null;
+        } catch (error) {
+            console.warn('Error finding GitHub issue by title:', error);
+            return null;
+        }
+    }
+
     async createPullRequest(title: string, head: string, base: string, body: string): Promise<string | null> {
         if (!this.isConfigured()) throw new Error('GitHub not configured.');
         try {

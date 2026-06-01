@@ -1,6 +1,8 @@
 export interface IssueProvider {
     createIssue(title: string, body: string, labels?: string[]): Promise<string | null>;
     listIssues(state?: 'open' | 'closed' | 'all'): Promise<{ number: number; title: string; state: string }[]>;
+    /** Find an open issue by exact title match (to prevent duplicates) */
+    findIssueByTitle(title: string): Promise<number | null>;
     addComment(issueNumber: number, body: string): Promise<string | null>;
     addLabels(issueNumber: number, labels: string[]): Promise<void>;
 }

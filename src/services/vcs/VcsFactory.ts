@@ -18,6 +18,9 @@ class CompositeProvider implements VcsProvider {
     listIssues(state?: 'open' | 'closed' | 'all'): Promise<{ number: number; title: string; state: string }[]> {
         return this.issueProvider.listIssues(state);
     }
+    findIssueByTitle(title: string): Promise<number | null> {
+        return this.issueProvider.findIssueByTitle(title);
+    }
     addComment(issueNumber: number, body: string): Promise<string | null> {
         return this.issueProvider.addComment(issueNumber, body);
     }
