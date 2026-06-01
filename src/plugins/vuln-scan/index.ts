@@ -1,42 +1,15 @@
 import { OrchestraPlugin } from '../../types';
 import fs from 'fs';
-import path from 'path';
-import { execSync } from 'child_process';
 import { consultAgentRouted, AgentRole } from '../../services/agentService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
 import { runMergeCandidates } from '../../services/agentOrchestrator';
 import { inferLanguageFromExtension } from '../../services/languageUtils';
-
-import { readCiPrContext } from '../../services/ciContext';
-
-const walkDir = (dir: string, ignored: Set<string>, exts: Set<string>, filesList: string[] = []) => {
-  if (filesList.length > 50) return filesList; // hard limit to avoid token explosion
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return filesList;
-  }
-
-  for (const entry of entries) {
-    if (filesList.length > 50) break;
-    if (entry.name.startsWith('.')) continue;
-    if (ignored.has(entry.name)) continue;
-
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walkDir(fullPath, ignored, exts, filesList);
-    } else if (entry.isFile()) {
-      const ext = path.extname(entry.name).toLowerCase();
-      if (exts.has(ext)) {
-        filesList.push(fullPath);
-      }
-    }
-  }
-  return filesList;
-};
+import { scanDependencies } from './dependencyScan';
+import { scanCodebase } from './codebaseScan';
+import { handleScanOutput } from './reportUtils';
+import { buildSingleFileAnalysisTask, buildFixTask } from './prompts';
 
 export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: string = 'report'): Promise<void> => {
   console.log(`\n🕵️‍♂️ Starting comprehensive security scan on repository: ${dirPath}\n`);
@@ -45,136 +18,17 @@ export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: str
   reportSections.push(`*Scan Date: ${new Date().toISOString().split('T')[0]}*\n`);
 
   let hasIssues = false;
-  let summary = '';
 
-  // 1. Dependency Check (npm audit for lock files)
-  const packageJsonPath = path.join(dirPath, 'package.json');
-  if (fs.existsSync(packageJsonPath)) {
-    console.log('📦 Scanning package dependencies (npm audit)...');
-    let auditOutput = '';
-    try {
-      auditOutput = execSync('npm audit --json', { cwd: dirPath, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
-    } catch (err: any) {
-      auditOutput = err.stdout ? err.stdout.toString() : '';
-    }
+  const depResults = await scanDependencies(dirPath);
+  reportSections.push(depResults.text);
+  if (depResults.hasIssues) hasIssues = true;
 
-    if (auditOutput) {
-      console.log('🤖 Analyzing dependency vulnerabilities...');
-      const depAnalysis = await consultAgentRouted(
-        AgentRole.SECURITY_ENGINEER,
-        'You are analyzing the output of `npm audit --json`. Summarize the key vulnerabilities, the affected packages, and provide concrete steps to fix them (e.g. commands to run). If there are no vulnerabilities or the JSON is empty/invalid, state "No dependency vulnerabilities found." Format your response cleanly in Markdown.',
-        auditOutput.substring(0, 20000)
-      );
-      reportSections.push('## Dependency Vulnerabilities\n');
-      reportSections.push(depAnalysis + '\n');
-      if (!depAnalysis.toLowerCase().includes('no dependency vulnerabilities found')) {
-        hasIssues = true;
-        summary += 'Dependency vulnerabilities detected.\n';
-      }
-    } else {
-      reportSections.push('## Dependency Vulnerabilities\n\nNo `npm audit` output available or no vulnerabilities found.\n');
-    }
-  } else {
-    reportSections.push('## Dependency Vulnerabilities\n\nNo `package.json` found. Dependency scanning skipped.\n');
-  }
+  const codeResults = await scanCodebase(dirPath);
+  reportSections.push(codeResults.text);
+  if (codeResults.hasIssues) hasIssues = true;
 
-  // 2. Codebase Scan for Bad Practices
-  console.log('🔎 Scanning codebase for bad practices and security flaws...');
-  const ignored = new Set(['node_modules', 'dist', 'build', 'coverage', 'out', 'public']);
-  const exts = new Set(['.js', '.ts', '.jsx', '.tsx', '.py', '.go', '.java', '.cs']);
-  const sourceFiles = walkDir(dirPath, ignored, exts);
-
-  if (sourceFiles.length === 0) {
-    reportSections.push('## Codebase Security Analysis\n\nNo source files found to scan.\n');
-  } else {
-    console.log(`Found ${sourceFiles.length} source files to sample.`);
-    
-    let combinedContent = '';
-    let charsUsed = 0;
-    const MAX_CHARS = 40000;
-
-    for (const file of sourceFiles) {
-      try {
-        const content = fs.readFileSync(file, 'utf-8');
-        if (charsUsed + content.length > MAX_CHARS) {
-          combinedContent += `\n\n--- ${path.relative(dirPath, file)} ---\n[Truncated due to size limits]`;
-          break;
-        }
-        combinedContent += `\n\n--- ${path.relative(dirPath, file)} ---\n${content}`;
-        charsUsed += content.length;
-      } catch {
-        continue;
-      }
-    }
-
-    console.log('🤖 Analyzing source code...');
-    const codeAnalysis = await consultAgentRouted(
-      AgentRole.SECURITY_ENGINEER,
-      'You are a Senior Security Engineer. Review the following codebase sample for security vulnerabilities (e.g. SQL Injection, XSS, hardcoded secrets, unsafe evals) and bad coding practices. Provide a structured markdown report identifying the file, the issue, the severity, and a recommendation on how to fix it. If no issues are found, explicitly state "No significant security issues found in the scanned files."',
-      combinedContent
-    );
-
-    reportSections.push('## Codebase Security Analysis\n');
-    reportSections.push(codeAnalysis + '\n');
-    if (!codeAnalysis.toLowerCase().includes('no significant security issues found')) {
-      hasIssues = true;
-      summary += 'Codebase vulnerabilities detected.\n';
-    }
-  }
-
-  // 3. Output Handling based on mode
   const finalReport = reportSections.join('\n');
-  
-  if (mode === 'report' || !hasIssues) {
-    const reportPath = path.join(dirPath, 'SECURITY_REPORT.md');
-    fs.writeFileSync(reportPath, finalReport);
-    console.log(`\n✅ Security scan complete! Report generated at: ${reportPath}`);
-    if (!hasIssues) console.log('No significant issues found. Modes issue/pr/comment skipped.');
-    return;
-  }
-
-  const vcs = VcsFactory.getProvider();
-  
-  if (mode === 'issue') {
-    const title = 'Security Vulnerability Scan Results';
-    const existingIssue = await vcs.findIssueByTitle(title);
-    
-    if (existingIssue) {
-      console.log(`ℹ️ An open issue already exists for security scans (#${existingIssue}). Adding report as a comment instead.`);
-      await vcs.addComment(existingIssue, `### 🕵️‍♂️ Orchestra Security Scan Update\n\n${finalReport}`);
-      console.log('✅ Comment added to existing issue.');
-    } else {
-      console.log('Creating security issue...');
-      const issueUrl = await vcs.createIssue(title, finalReport, ['security', 'orchestra', 'auto-scan']);
-      if (issueUrl) console.log(`✅ Issue created successfully: ${issueUrl}`);
-      else console.log('❌ Failed to create issue.');
-    }
-  } 
-  else if (mode === 'comment') {
-    const prContext = readCiPrContext();
-    if (prContext) {
-      console.log(`Commenting on PR #${prContext.prNumber}...`);
-      await vcs.addComment(prContext.prNumber, `### 🕵️‍♂️ Orchestra Security Scan\n\n${finalReport}`);
-      console.log('✅ Comment posted to PR.');
-    } else {
-      console.log('❌ Mode is "comment" but no CI PR context found. Writing to local report instead.');
-      const reportPath = path.join(dirPath, 'SECURITY_REPORT.md');
-      fs.writeFileSync(reportPath, finalReport);
-    }
-  }
-  else if (mode === 'pr') {
-    const title = 'Security Vulnerability Scan Results';
-    console.log('Mode "pr" selected for full repo scan. This mode is better suited for single-file scans. Attempting to report issue...');
-    const existingIssue = await vcs.findIssueByTitle(title);
-    
-    if (existingIssue) {
-      console.log(`ℹ️ An open issue already exists for security scans (#${existingIssue}). Adding report as a comment instead.`);
-      await vcs.addComment(existingIssue, `### 🕵️‍♂️ Orchestra Security Scan Update\n\n${finalReport}`);
-    } else {
-      const issueUrl = await vcs.createIssue(title, finalReport, ['security', 'orchestra', 'auto-scan']);
-      if (issueUrl) console.log(`✅ Issue created successfully: ${issueUrl}`);
-    }
-  }
+  await handleScanOutput(dirPath, mode, finalReport, hasIssues);
 };
 
 export const scanForVulnerabilities = async (filePath: string, applyFix: boolean = false): Promise<void> => {
@@ -194,11 +48,8 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
     let contentToScan = fs.readFileSync(filePath, 'utf-8');
     const codeLanguage = inferLanguageFromExtension(filePath);
 
-    const analysis = await consultAgentRouted(
-        AgentRole.SECURITY_ENGINEER, 
-        'Analyze the provided code for security vulnerabilities. If issues found, list them clearly. If none, strictly say "NO_ISSUES".', 
-        contentToScan
-    );
+    const task = buildSingleFileAnalysisTask(contentToScan);
+    const analysis = await consultAgentRouted(AgentRole.SECURITY_ENGINEER, task, '');
 
     if (analysis.includes('NO_ISSUES')) {
         console.log('No significant vulnerabilities found.');
@@ -209,19 +60,14 @@ export const scanForVulnerabilities = async (filePath: string, applyFix: boolean
     console.log(analysis);
 
     console.log('\nGenerating fix suggestion from multiple developers...');
-    const baseFixTask = `Based on the security analysis, provide ONLY the FULL refactored file content that fixes the vulnerabilities.
-Do not include explanations or markdown formatting.`;
+    const baseFixTask = buildFixTask(contentToScan, analysis);
 
     const devPromises: Promise<string>[] = [];
     const devAgentsCount = 2;
     for (let i = 0; i < devAgentsCount; i++) {
         const devTask = `${baseFixTask}\n\nYou are Developer ${i + 1}.`;
         devPromises.push(
-            consultAgentRouted(
-                AgentRole.SOFTWARE_ENGINEER,
-                devTask,
-                `Original Code:\n${contentToScan}\n\nAnalysis:\n${analysis}`
-            )
+            consultAgentRouted(AgentRole.SOFTWARE_ENGINEER, devTask, '')
         );
     }
 
@@ -234,11 +80,7 @@ Do not include explanations or markdown formatting.`;
 
     if (candidateFixes.length === 0) {
         console.warn('No valid fix candidates extracted from developer agents. Falling back to single-agent fix.');
-        const singleFix = await consultAgentRouted(
-            AgentRole.SOFTWARE_ENGINEER,
-            baseFixTask,
-            `Original Code:\n${contentToScan}\n\nAnalysis:\n${analysis}`
-        );
+        const singleFix = await consultAgentRouted(AgentRole.SOFTWARE_ENGINEER, baseFixTask, '');
         fixSuggestion = singleFix;
     } else if (candidateFixes.length === 1) {
         fixSuggestion = candidateFixes[0];
@@ -291,7 +133,6 @@ ${fixedCode || fixSuggestion}
     if (existingIssueId) {
        console.log(`ℹ️ Issue already exists (#${existingIssueId}). Adding report as comment.`);
        await vcs.addComment(existingIssueId, `### Security Fix Applied\n\n${issueBody}`);
-       // Simulated issue URL for the log
        issueUrl = `Issue #${existingIssueId}`;
     } else {
        issueUrl = await vcs.createIssue(issueTitle, issueBody, ['security', 'orchestra', 'auto-fixed']);
