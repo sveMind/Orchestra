@@ -46,4 +46,4 @@ jobs:
           AI_BASE_URL: https://openrouter.ai/api/v1
           AI_MODEL: ${{ secrets.AI_MODEL || 'openrouter/auto' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm start -- pr-review ${{ github.event.pull_request.number }}
+        run: npm start -- pr-review  ${{ github.event.pull_request.number }}
