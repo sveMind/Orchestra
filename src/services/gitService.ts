@@ -195,18 +195,6 @@ export const commitChanges = async (message: string, files: string[] = ['.']): P
 
 export const pushChanges = async (branchName: string): Promise<void> => {
     try {
-        const token = process.env.AZURE_PERSONAL_ACCESS_TOKEN || process.env.GITHUB_TOKEN;
-        if (token && process.env.AZURE_ORG_URL) {
-            // Azure devops uses https://<token>@dev.azure.com/...
-            const originUrl = await git.remote(['get-url', 'origin']);
-            if (originUrl) {
-                const cleanUrl = String(originUrl).trim().replace(/^https?:\/\//, '');
-                const authUrl = `https://${token}@${cleanUrl}`;
-                await git.push(authUrl, branchName, { '--set-upstream': null });
-                console.log(`Pushed changes to ${branchName}`);
-                return;
-            }
-        }
         await git.push('origin', branchName, { '--set-upstream': null });
         console.log(`Pushed changes to ${branchName}`);
     } catch (error) {
@@ -217,17 +205,6 @@ export const pushChanges = async (branchName: string): Promise<void> => {
 
 export const pushChangesForceWithLease = async (branchName: string): Promise<void> => {
   try {
-    const token = process.env.AZURE_PERSONAL_ACCESS_TOKEN || process.env.GITHUB_TOKEN;
-    if (token && process.env.AZURE_ORG_URL) {
-        const originUrl = await git.remote(['get-url', 'origin']);
-        if (originUrl) {
-            const cleanUrl = String(originUrl).trim().replace(/^https?:\/\//, '');
-            const authUrl = `https://${token}@${cleanUrl}`;
-            await git.push(authUrl, branchName, { '--set-upstream': null, '--force-with-lease': null });
-            console.log(`Force-pushed changes to ${branchName}`);
-            return;
-        }
-    }
     await git.push('origin', branchName, { '--set-upstream': null, '--force-with-lease': null });
     console.log(`Force-pushed changes to ${branchName}`);
   } catch (error) {
