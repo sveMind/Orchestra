@@ -444,7 +444,7 @@ const plugin: OrchestraPlugin = {
         return;
       }
 
-      if (nonDocChangedFiles.length !== changedFiles.length) {
+      if (nonDocChangedFiles.length !== changedFiles.length && mode !== 'structure') {
         changedFiles = nonDocChangedFiles;
         const nextDiffs = new Map<string, string>();
         for (const f of nonDocChangedFiles) {
@@ -977,7 +977,7 @@ const plugin: OrchestraPlugin = {
     }
 
     const docsToUpdate = pickDocsToUpdate(repoRoot, changedFiles, mode === 'structure' ? 'changed' : mode);
-    if (docsToUpdate.length === 0) {
+    if (docsToUpdate.length === 0 && mode !== 'structure') {
       console.log('ℹ️ No documentation files selected for update. Documentation update skipped.');
       return;
     }
@@ -1099,12 +1099,16 @@ const plugin: OrchestraPlugin = {
       updatedCount += 1;
     }
 
-    if (updatedCount === 0) {
+    if (updatedCount === 0 && mode !== 'structure') {
       console.log('ℹ️ No documentation updates were necessary.');
       return;
     }
 
-    console.log(`✅ Documentation updated: ${updatedCount} file(s). Skipped: ${skippedCount} file(s).`);
+    if (mode === 'structure') {
+        console.log(`✅ Structure generated. Documentation updated: ${updatedCount} file(s). Skipped: ${skippedCount} file(s).`);
+    } else {
+        console.log(`✅ Documentation updated: ${updatedCount} file(s). Skipped: ${skippedCount} file(s).`);
+    }
 
     const postUpdateChanged = await getChangedFiles();
     const changedDocs = (postUpdateChanged || []).filter(f => {
