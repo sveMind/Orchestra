@@ -647,7 +647,6 @@ const plugin: OrchestraPlugin = {
         environment: CANONICAL_ENVIRONMENT_DOC,
         'local-setup': path.join(CANONICAL_DOCS_DIR, 'LOCAL_SETUP.md'),
         architecture: CANONICAL_ARCHITECTURE_DOC,
-        api: path.join(CANONICAL_DOCS_DIR, 'API.md'),
         pipelines: path.join(CANONICAL_DOCS_DIR, 'PIPELINES.md'),
         docker: CANONICAL_DOCKER_DOC,
         deployment: path.join(CANONICAL_DOCS_DIR, 'DEPLOYMENT.md'),
