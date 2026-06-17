@@ -604,6 +604,8 @@ const plugin: OrchestraPlugin = {
           '- DO NOT output a diff, patch, or partial snippet. You must output the entire file from top to bottom.',
           '- Write HIGHLY DESCRIPTIVE and IN-DEPTH documentation based on the provided repository context.',
           '- Expand upon the provided draft: do not just leave short bullet points. Analyze the signals, app type, and files to write meaningful paragraphs.',
+          '- AVOID meta-commentary: Do not use phrases like "heuristic analysis indicates", "is detected as", or "the signals suggest". Write as if you are the human architect explaining how the system works.',
+          '- Describe the actual code, directories, and logic. Go deep into the codebase details.',
           '- For Install Requirements, explicitly detail how to use language-specific package managers (e.g. pip, npm) vs system tools.',
           '- Make targeted updates to reflect the current state of the repository. Do not rewrite the entire document unnecessarily.',
           '- If no update is needed, output exactly: NO_CHANGE'
