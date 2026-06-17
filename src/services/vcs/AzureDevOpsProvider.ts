@@ -146,11 +146,22 @@ export class AzureDevOpsProvider implements VcsProvider {
         if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
         await this.init();
         try {
+            const reviewers: any[] = [];
+            const authorId = process.env.AZURE_PR_AUTHOR_ID || process.env.BUILD_REQUESTEDFORID;
+            
+            if (authorId) {
+                reviewers.push({
+                    id: authorId,
+                    isRequired: true
+                });
+            }
+
             const pr = await this.gitApi?.createPullRequest({
                 sourceRefName: `refs/heads/${head}`,
                 targetRefName: `refs/heads/${base}`,
                 title: title,
                 description: body,
+                reviewers: reviewers.length > 0 ? reviewers : undefined
             }, this.repoId!, this.project);
             return (pr as any)?.repository?.webUrl ? `${(pr as any).repository.webUrl}/pullrequest/${pr?.pullRequestId}` : null;
         } catch (error) {
