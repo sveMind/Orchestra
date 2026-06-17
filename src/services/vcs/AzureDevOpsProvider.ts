@@ -57,6 +57,13 @@ export class AzureDevOpsProvider implements VcsProvider {
 
     async createIssue(title: string, body: string, labels: string[] = []): Promise<string | null> {
         if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
+        
+        // Skip creating Work Items unless explicitly enabled via environment variable
+        if (process.env.AZURE_WORKITEM?.toLowerCase() !== 'true') {
+            console.log('Skipping Azure Work Item creation: AZURE_WORKITEM is not set to true.');
+            return null;
+        }
+
         await this.init();
         try {
             const patchDocument: JsonPatchDocument = [
