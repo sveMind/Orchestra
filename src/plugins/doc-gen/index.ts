@@ -234,7 +234,7 @@ const buildDocUpdateTask = (docFileName: string, mode: DocGenMode): string => {
   const modeNote =
     mode === 'all'
       ? 'Update documentation to reflect the current repository behavior and keep it accurate.'
-      : 'Update documentation ONLY if the recent code changes require it.';
+      : 'Update documentation ONLY if the recent code changes explicitly require it.';
 
   return [
     'You are maintaining repository documentation.',
@@ -244,9 +244,10 @@ const buildDocUpdateTask = (docFileName: string, mode: DocGenMode): string => {
     '- Output ONLY the FULL, COMPLETE updated markdown file content (no explanations, no surrounding code fences).',
     '- DO NOT output a diff, patch, or partial snippet. You must output the entire file from top to bottom.',
     '- Do not invent features or behavior that are not evidenced by the provided diffs/context.',
-    '- Preserve existing meaning unless it is clearly outdated.',
-    '- Make the minimum necessary updates to reflect the code changes. Do not rewrite the whole document unnecessarily.',
-    '- If the documentation is already accurate, output exactly: NO_CHANGE',
+    '- PRESERVE EXISTING TEXT: Do not rephrase, rewrite, or restructure existing documentation just to change the wording.',
+    '- ONLY update or add text if the technical facts or repository signals have actually changed.',
+    '- Make the absolute minimum necessary updates to reflect the code changes. Do not rewrite the whole document unnecessarily.',
+    '- If the documentation is already technically accurate regarding the codebase, output exactly: NO_CHANGE',
     '',
     `Target File: ${docFileName}`
   ].join('\n');
@@ -647,6 +648,7 @@ const plugin: OrchestraPlugin = {
         environment: CANONICAL_ENVIRONMENT_DOC,
         'local-setup': path.join(CANONICAL_DOCS_DIR, 'LOCAL_SETUP.md'),
         architecture: CANONICAL_ARCHITECTURE_DOC,
+        api: path.join(CANONICAL_DOCS_DIR, 'API.md'),
         pipelines: path.join(CANONICAL_DOCS_DIR, 'PIPELINES.md'),
         docker: CANONICAL_DOCKER_DOC,
         deployment: path.join(CANONICAL_DOCS_DIR, 'DEPLOYMENT.md'),

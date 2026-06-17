@@ -191,7 +191,7 @@ export const isMeaningfulDocUpdate = (existing: string, next: string): boolean =
   if (markersChanged) return true;
 
   const sim = jaccardSimilarity(existing, next);
-  return sim < 0.97; // Strict threshold to prevent small meaningless textual alternations
+  return sim < 0.90; // Strict threshold to prevent small meaningless textual alternations
 };
 
 export const getRepoRelPosix = (repoRoot: string, absPath: string): string => {
