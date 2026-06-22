@@ -161,16 +161,26 @@ const safeJsonParse = (text: string): any | null => {
   }
 };
 
-const extractNodeDeps = (repoRoot: string): { deps: string[]; devDeps: string[] } => {
-  const abs = path.join(repoRoot, 'package.json');
-  if (!fs.existsSync(abs)) return { deps: [], devDeps: [] };
-  const pkg = safeJsonParse(readTextFile(abs)) || {};
-  const deps = pkg && typeof pkg === 'object' && pkg.dependencies && typeof pkg.dependencies === 'object' ? Object.keys(pkg.dependencies) : [];
-  const devDeps =
-    pkg && typeof pkg === 'object' && pkg.devDependencies && typeof pkg.devDependencies === 'object'
-      ? Object.keys(pkg.devDependencies)
-      : [];
-  return { deps: deps.sort(), devDeps: devDeps.sort() };
+const extractNodeDeps = (repoRoot: string, topLevelDirs: string[] = []): { deps: string[]; devDeps: string[] } => {
+  const deps = new Set<string>();
+  const devDeps = new Set<string>();
+
+  const candidates = [repoRoot, ...topLevelDirs.map(d => path.join(repoRoot, d))];
+  for (const dir of candidates) {
+    const abs = path.join(dir, 'package.json');
+    if (!fs.existsSync(abs)) continue;
+    const pkg = safeJsonParse(readTextFile(abs)) || {};
+    if (pkg && typeof pkg === 'object') {
+      if (pkg.dependencies && typeof pkg.dependencies === 'object') {
+        Object.keys(pkg.dependencies).forEach(k => deps.add(k));
+      }
+      if (pkg.devDependencies && typeof pkg.devDependencies === 'object') {
+        Object.keys(pkg.devDependencies).forEach(k => devDeps.add(k));
+      }
+    }
+  }
+
+  return { deps: Array.from(deps).sort(), devDeps: Array.from(devDeps).sort() };
 };
 
 const detectLanguages = (repoRoot: string, ignoredDirs: Set<string>): string[] => {
@@ -280,8 +290,8 @@ const detectEmbeddedSignals = (repoRoot: string, topLevelDirs: string[], topLeve
   return { detected: kinds.size > 0, kinds: Array.from(kinds).sort(), files: Array.from(new Set(files)).sort() };
 };
 
-const detectNodeFrameworks = (repoRoot: string): { frontend: string[]; backend: string[] } => {
-  const { deps, devDeps } = extractNodeDeps(repoRoot);
+const detectNodeFrameworks = (repoRoot: string, topLevelDirs: string[]): { frontend: string[]; backend: string[] } => {
+  const { deps, devDeps } = extractNodeDeps(repoRoot, topLevelDirs);
   const all = new Set<string>([...deps, ...devDeps].map(d => d.toLowerCase()));
 
   const frontend: string[] = [];
@@ -344,13 +354,18 @@ const detectJavaFrameworks = (repoRoot: string): string[] => {
   return Array.from(new Set(found)).sort();
 };
 
-const detectDotnetFrameworks = (repoRoot: string, topLevelDirs: string[]): string[] => {
+const detectDotnetFrameworks = (repoRoot: string, ignoredDirs: Set<string>): string[] => {
   const found: string[] = [];
-  const stack = [repoRoot, ...topLevelDirs.map(d => path.join(repoRoot, d))].filter(p => fs.existsSync(p));
+  const stack = [repoRoot];
   let filesChecked = 0;
+  let visitedDirs = 0;
+
   while (stack.length) {
     const dir = stack.pop();
     if (!dir) continue;
+    visitedDirs += 1;
+    if (visitedDirs > 1000) break;
+
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -358,16 +373,24 @@ const detectDotnetFrameworks = (repoRoot: string, topLevelDirs: string[]): strin
       continue;
     }
     for (const entry of entries) {
+      if (entry.name.startsWith('.')) {
+        if (entry.name === '.git') continue;
+      }
       const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) continue;
+      if (entry.isDirectory()) {
+        if (ignoredDirs.has(entry.name) || entry.name.toLowerCase() === 'bin' || entry.name.toLowerCase() === 'obj') continue;
+        stack.push(fullPath);
+        continue;
+      }
       if (!entry.isFile()) continue;
       if (!entry.name.toLowerCase().endsWith('.csproj')) continue;
+      
       filesChecked += 1;
-      if (filesChecked > 30) break;
+      if (filesChecked > 50) break;
       const text = readTextFileTruncated(fullPath, 30000).toLowerCase();
       if (text.includes('microsoft.aspnetcore')) found.push('aspnetcore');
     }
-    if (filesChecked > 30) break;
+    if (filesChecked > 50) break;
   }
   return Array.from(new Set(found)).sort();
 };
@@ -430,6 +453,7 @@ const extractApiEndpoints = (repoRoot: string, ignoredDirs: Set<string>, backend
   const nodeLike = true;
   const pyLike = true;
   const goLike = true;
+  const csLike = true;
 
   const exts = new Set<string>();
   if (nodeLike) {
@@ -438,6 +462,7 @@ const extractApiEndpoints = (repoRoot: string, ignoredDirs: Set<string>, backend
   }
   if (pyLike) exts.add('.py');
   if (goLike) exts.add('.go');
+  if (csLike) exts.add('.cs');
   if (!exts.size) return [];
 
   const { absPaths, read } = collectTextFilesByExt(repoRoot, ignoredDirs, exts, 260, 160000);
@@ -506,6 +531,17 @@ const extractApiEndpoints = (repoRoot: string, ignoredDirs: Set<string>, backend
       let m: RegExpExecArray | null;
       while ((m = ginRe.exec(text))) {
         add(m[1], m[2], abs);
+        if (endpoints.length >= 200) break;
+      }
+    }
+
+    if (csLike) {
+      const csRe = /\[\s*(HttpGet|HttpPost|HttpPut|HttpDelete|HttpPatch|HttpOptions|HttpHead)\s*(?:\(\s*["']([^"']+)["']\s*\))?\s*\]/gim;
+      let m: RegExpExecArray | null;
+      while ((m = csRe.exec(text))) {
+        const method = m[1].replace(/^Http/i, '').toUpperCase();
+        const p = m[2] || '/';
+        add(method, p, abs);
         if (endpoints.length >= 200) break;
       }
     }
@@ -672,7 +708,7 @@ export const scanRepoSignals = (
   const dockerText = dockerfilePath ? readTextFile(dockerfilePath) : '';
   const dockerfile = parseDockerfileInfo(dockerText);
 
-  const hasPackageJson = fs.existsSync(path.join(repoRoot, 'package.json'));
+  const hasPackageJson = fs.existsSync(path.join(repoRoot, 'package.json')) || topLevelDirs.some(d => fs.existsSync(path.join(repoRoot, d, 'package.json')));
   const nodeApiHints = extractNodeApiHints(repoRoot);
 
   const languages = detectLanguages(repoRoot, ignoredDirs);
@@ -680,11 +716,11 @@ export const scanRepoSignals = (
   const nativeBuild = detectNativeBuild(repoRoot);
   const nativeHasSources = detectNativeSources(repoRoot, ignoredDirs);
 
-  const nodeFrameworks = hasPackageJson ? detectNodeFrameworks(repoRoot) : { frontend: [], backend: [] };
+  const nodeFrameworks = hasPackageJson ? detectNodeFrameworks(repoRoot, topLevelDirs) : { frontend: [], backend: [] };
   const pythonFrameworks = detectPythonFrameworks(repoRoot);
   const goFrameworks = detectGoFrameworks(repoRoot);
   const javaFrameworks = detectJavaFrameworks(repoRoot);
-  const dotnetFrameworks = detectDotnetFrameworks(repoRoot, topLevelDirs);
+  const dotnetFrameworks = detectDotnetFrameworks(repoRoot, ignoredDirs);
 
   const frontendKinds = new Set<string>(nodeFrameworks.frontend);
   if (topLevelDirs.some(d => ['frontend', 'client', 'web', 'ui'].includes(d))) frontendKinds.add('frontend');
