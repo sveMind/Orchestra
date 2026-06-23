@@ -544,7 +544,7 @@ const plugin: OrchestraPlugin = {
         const sorted = endpoints
           .slice()
           .sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method))
-          .slice(0, 200);
+          .slice(0, 800);
 
         const lines: string[] = [];
         lines.push('openapi: 3.0.3');
@@ -807,7 +807,7 @@ const plugin: OrchestraPlugin = {
               '',
               'Detected endpoints (heuristic):',
               endpoints
-                .slice(0, 60)
+                .slice(0, 800)
                 .map(e => `- ${e.method} ${e.path} (${e.source})`)
                 .join('\n')
             ].join('\n');
