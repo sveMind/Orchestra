@@ -170,10 +170,16 @@ export const buildApiDoc = (signals: RepoSignals): string => {
   }
 
   if (signals.apiEndpoints && signals.apiEndpoints.length) {
-    lines.push('## REST API');
-    lines.push('- Document the REST API endpoints, expected request formats, and response payloads.');
-    lines.push('- Ensure you format the documentation as Markdown, do NOT output raw JSON objects.');
-    return lines.join('\n');
+    lines.push('## REST API Endpoints');
+    lines.push('| Method | Path | Source File |');
+    lines.push('|--------|------|-------------|');
+    for (const ep of signals.apiEndpoints.slice(0, 30)) {
+      lines.push(`| \`${ep.method}\` | \`${ep.path}\` | \`${ep.source}\` |`);
+    }
+    if (signals.apiEndpoints.length > 30) {
+      lines.push(`| ... | ... | *(+${signals.apiEndpoints.length - 30} more)* |`);
+    }
+    lines.push('');
   }
 
   lines.push('- Document the repository’s public API surface (CLI, libraries, services).');
@@ -329,9 +335,11 @@ export function buildOpenApiDoc(
   const endpointList = endpoints.length
     ? endpoints
         .slice(0, 40)
-        .map(e => `- ${e.method} ${e.path}`)
+        .map(e => `| \`${e.method}\` | \`${e.path}\` | \`${e.source}\` |`)
         .join('\n')
     : '- (no endpoints detected)';
+
+  const tableHeader = endpoints.length ? '| Method | Path | Source File |\n|--------|------|-------------|\n' : '';
 
   return [
     '# OpenAPI',
@@ -340,7 +348,7 @@ export function buildOpenApiDoc(
     specList,
     '',
     '## Detected Endpoints (Heuristic)',
-    endpointList,
+    tableHeader + endpointList,
     '',
     '## Swagger / API Docs',
     '- Use the OpenAPI spec as the source of truth for the API surface.',

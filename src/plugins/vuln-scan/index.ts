@@ -6,7 +6,7 @@ import { extractCodeBlock } from '../../utils/codeExtractor';
 import { createBranch, commitChanges, pushChanges, buildBranchName } from '../../services/gitService';
 import { runMergeCandidates } from '../../services/agentOrchestrator';
 import { inferLanguageFromExtension } from '../../services/languageUtils';
-import { scanDependencies } from './dependencyScan';
+import { scanDependencies, fixDependenciesAndCreatePR } from './dependencyScan';
 import { scanCodebase } from './codebaseScan';
 import { handleScanOutput } from './reportUtils';
 import { buildSingleFileAnalysisTask, buildFixTask } from './prompts';
@@ -21,7 +21,12 @@ export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: str
 
   const depResults = await scanDependencies(dirPath);
   reportSections.push(depResults.text);
-  if (depResults.hasIssues) hasIssues = true;
+  if (depResults.hasIssues) {
+    hasIssues = true;
+    if (mode === 'pr' || mode === 'autofix') {
+      await fixDependenciesAndCreatePR(dirPath, depResults.text);
+    }
+  }
 
   const codeResults = await scanCodebase(dirPath);
   reportSections.push(codeResults.text);
@@ -175,7 +180,7 @@ const plugin: OrchestraPlugin = {
   command: 'vuln-scan',
   args: [
     { name: 'path', description: 'Path to the code file or directory (defaults to current directory)', required: false },
-    { name: 'mode', description: 'Output mode: report | issue | comment | pr (default: report)', required: false }
+    { name: 'mode', description: 'Output mode: report | issue | comment | pr | autofix (default: report)', required: false }
   ],
   action: async (targetPath?: string, targetMode?: string) => {
     const p = targetPath && typeof targetPath === 'string' ? targetPath : process.cwd();

@@ -465,10 +465,10 @@ const extractApiEndpoints = (repoRoot: string, ignoredDirs: Set<string>, backend
   if (csLike) exts.add('.cs');
   if (!exts.size) return [];
 
-  const { absPaths, read } = collectTextFilesByExt(repoRoot, ignoredDirs, exts, 260, 160000);
+  const { absPaths, read } = collectTextFilesByExt(repoRoot, ignoredDirs, exts, 1500, 160000);
 
   for (const abs of absPaths) {
-    if (endpoints.length >= 200) break;
+    if (endpoints.length >= 800) break;
     const text = read(abs);
     if (!text) continue;
 
@@ -491,7 +491,7 @@ const extractApiEndpoints = (repoRoot: string, ignoredDirs: Set<string>, backend
       p = p.replace(/\$\{[^}]+\}/g, '{id}');
       
       add(method, p, abs);
-      if (endpoints.length >= 200) break;
+      if (endpoints.length >= 800) break;
     }
 
     if (nodeLike) {
@@ -499,7 +499,7 @@ const extractApiEndpoints = (repoRoot: string, ignoredDirs: Set<string>, backend
       let m: RegExpExecArray | null;
       while ((m = re.exec(text))) {
         add(m[1], m[2], abs);
-        if (endpoints.length >= 200) break;
+        if (endpoints.length >= 800) break;
       }
     }
 
@@ -508,7 +508,7 @@ const extractApiEndpoints = (repoRoot: string, ignoredDirs: Set<string>, backend
       let m: RegExpExecArray | null;
       while ((m = fastApiRe.exec(text))) {
         add(m[1], m[2], abs);
-        if (endpoints.length >= 200) break;
+        if (endpoints.length >= 800) break;
       }
 
       const flaskRouteRe = /@\s*\w+\s*\.\s*route\s*\(\s*['"`]([^'"`]+)['"`]\s*(?:,\s*methods\s*=\s*\[([^\]]+)\])?/gim;
@@ -522,7 +522,7 @@ const extractApiEndpoints = (repoRoot: string, ignoredDirs: Set<string>, backend
               .filter(Boolean)
           : ['GET'];
         for (const method of methods) add(method, p, abs);
-        if (endpoints.length >= 200) break;
+        if (endpoints.length >= 800) break;
       }
     }
 
@@ -531,18 +531,34 @@ const extractApiEndpoints = (repoRoot: string, ignoredDirs: Set<string>, backend
       let m: RegExpExecArray | null;
       while ((m = ginRe.exec(text))) {
         add(m[1], m[2], abs);
-        if (endpoints.length >= 200) break;
+        if (endpoints.length >= 800) break;
       }
     }
 
     if (csLike) {
+      let baseRoute = '/';
+      const routeRe = /\[\s*Route\s*\(\s*["']([^"']+)["']\s*\)\s*\]/im;
+      const rm = routeRe.exec(text);
+      if (rm) {
+        baseRoute = rm[1];
+        if (!baseRoute.startsWith('/')) baseRoute = '/' + baseRoute;
+        if (!baseRoute.endsWith('/')) baseRoute += '/';
+      }
+
       const csRe = /\[\s*(HttpGet|HttpPost|HttpPut|HttpDelete|HttpPatch|HttpOptions|HttpHead)\s*(?:\(\s*["']([^"']+)["']\s*\))?\s*\]/gim;
       let m: RegExpExecArray | null;
       while ((m = csRe.exec(text))) {
         const method = m[1].replace(/^Http/i, '').toUpperCase();
-        const p = m[2] || '/';
+        let p = m[2] || '';
+        
+        if (!p.startsWith('/')) {
+            p = baseRoute + p;
+        }
+        if (!p.startsWith('/')) p = '/' + p;
+        if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+
         add(method, p, abs);
-        if (endpoints.length >= 200) break;
+        if (endpoints.length >= 800) break;
       }
     }
   }
