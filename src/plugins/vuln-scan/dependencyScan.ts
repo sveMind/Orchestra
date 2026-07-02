@@ -3,120 +3,194 @@ import path from 'path';
 import { execSync } from 'child_process';
 import { consultAgentRouted, AgentRole } from '../../services/agentService';
 import { buildDependencyAnalysisTask } from './prompts';
-import { createBranch, commitChanges, pushChanges, buildBranchName, getChangedFiles, setWorkingDirectory } from '../../services/gitService';
+import { createBranch, commitChanges, pushChanges, buildBranchName, getChangedFiles, setWorkingDirectory, ensureCommitIdentity } from '../../services/gitService';
 import { VcsFactory } from '../../services/vcs/VcsFactory';
 
-const findDotnetTargets = (dirPath: string): string[] => {
-  const targets: string[] = [];
+const SKIP_DIRS = new Set(['node_modules', 'bin', 'obj', 'dist', '.git']);
+
+const walkRepo = (dirPath: string, onFile: (filePath: string) => void): void => {
   const stack = [dirPath];
   let visitedDirs = 0;
+
   while (stack.length) {
     const dir = stack.pop();
     if (!dir) continue;
-    visitedDirs++;
-    if (visitedDirs > 1000) break;
+    visitedDirs += 1;
+    if (visitedDirs > 2000) break;
 
     let entries: fs.Dirent[];
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
 
     for (const entry of entries) {
       if (entry.name.startsWith('.') && entry.name !== '.github') continue;
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === 'node_modules' || entry.name === 'bin' || entry.name === 'obj') continue;
+        if (SKIP_DIRS.has(entry.name)) continue;
         stack.push(fullPath);
-      } else if (entry.isFile()) {
-        if (entry.name.endsWith('.sln') || entry.name.endsWith('.csproj')) {
-          targets.push(fullPath);
-        }
+        continue;
       }
+      if (entry.isFile()) onFile(fullPath);
     }
   }
-  // Prioritize sln files
+};
+
+const findFilesByBaseName = (dirPath: string, fileName: string): string[] => {
+  const files = new Set<string>();
+  walkRepo(dirPath, fullPath => {
+    if (path.basename(fullPath) === fileName) files.add(fullPath);
+  });
+  return Array.from(files).sort();
+};
+
+const findNpmPackageDirs = (dirPath: string): string[] => {
+  const dirs = new Set<string>();
+  for (const filePath of findFilesByBaseName(dirPath, 'package.json')) {
+    dirs.add(path.dirname(filePath));
+  }
+  return Array.from(dirs).sort();
+};
+
+const findDotnetTargets = (dirPath: string): string[] => {
+  const targets: string[] = [];
+  walkRepo(dirPath, fullPath => {
+    if (fullPath.endsWith('.sln') || fullPath.endsWith('.csproj')) targets.push(fullPath);
+  });
   const sln = targets.filter(t => t.endsWith('.sln'));
-  return sln.length > 0 ? sln : targets;
+  return sln.length > 0 ? Array.from(new Set(sln)).sort() : Array.from(new Set(targets)).sort();
+};
+
+const findDotnetProjects = (dirPath: string): string[] => {
+  const projects: string[] = [];
+  walkRepo(dirPath, fullPath => {
+    if (fullPath.endsWith('.csproj')) projects.push(fullPath);
+  });
+  return Array.from(new Set(projects)).sort();
+};
+
+const extractVulnerableDotnetPackages = (auditOutput: string): string[] => {
+  const matches = new Set<string>();
+  const lineRe = /^\s*[> ]\s*([A-Za-z0-9_.-]+)\s+\d+(?:\.\d+)*(?:[-+A-Za-z0-9.]*)?/gm;
+  let m: RegExpExecArray | null;
+  while ((m = lineRe.exec(auditOutput))) {
+    matches.add(m[1]);
+  }
+  return Array.from(matches).sort();
+};
+
+const findPythonRequirementFiles = (dirPath: string): string[] => {
+  const files: string[] = [];
+  walkRepo(dirPath, fullPath => {
+    const base = path.basename(fullPath);
+    if (base === 'requirements.txt') files.push(fullPath);
+  });
+  return Array.from(new Set(files)).sort();
+};
+
+const findGoModuleDirs = (dirPath: string): string[] => {
+  const dirs = new Set<string>();
+  for (const filePath of findFilesByBaseName(dirPath, 'go.mod')) {
+    dirs.add(path.dirname(filePath));
+  }
+  return Array.from(dirs).sort();
+};
+
+const getLatestPythonVersion = (packageName: string): string => {
+  try {
+    const output = execSync(`python3 -m pip index versions "${packageName}"`, {
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).toString();
+    const latestLine = output.match(/LATEST:\s*([^\s]+)/i);
+    if (latestLine) return latestLine[1].trim();
+    const availableLine = output.match(/Available versions:\s*([^\n]+)/i);
+    if (availableLine) {
+      const first = availableLine[1].split(',')[0]?.trim();
+      return first || '';
+    }
+    return '';
+  } catch {
+    return '';
+  }
+};
+
+const updatePinnedRequirementsFile = (requirementsPath: string): boolean => {
+  const original = fs.readFileSync(requirementsPath, 'utf-8');
+  const updated = original
+    .split(/\r?\n/)
+    .map(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return line;
+      const match = trimmed.match(/^([A-Za-z0-9_.-]+)==([^\s#]+)$/);
+      if (!match) return line;
+      const latest = getLatestPythonVersion(match[1]);
+      if (!latest || latest === match[2]) return line;
+      return `${match[1]}==${latest}`;
+    })
+    .join('\n');
+
+  if (updated === original) return false;
+  fs.writeFileSync(requirementsPath, updated);
+  return true;
 };
 
 export const scanDependencies = async (dirPath: string): Promise<{ text: string, hasIssues: boolean }> => {
   let reportText = '';
   let hasIssues = false;
 
-  const packageJsonPath = path.join(dirPath, 'package.json');
-  let auditOutputCombined = '';
-
-  if (fs.existsSync(packageJsonPath)) {
-    console.log('📦 Scanning Node.js package dependencies in root (npm audit)...');
-    try {
-      auditOutputCombined += execSync('npm audit --json', { cwd: dirPath, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
-    } catch (err: any) {
-      auditOutputCombined += err.stdout ? err.stdout.toString() : '';
-    }
-  } else {
-    const stack = [dirPath];
-    let visitedDirs = 0;
-    while (stack.length) {
-      const dir = stack.pop();
-      if (!dir) continue;
-      visitedDirs++;
-      if (visitedDirs > 1000) break;
-
-      let entries: fs.Dirent[];
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
-
-      for (const entry of entries) {
-        if (entry.name.startsWith('.') && entry.name !== '.github') continue;
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          if (entry.name === 'node_modules' || entry.name === 'bin' || entry.name === 'obj') continue;
-          stack.push(fullPath);
-        } else if (entry.isFile() && entry.name === 'package.json') {
-          console.log(`📦 Scanning Node.js package dependencies in ${dir} (npm audit)...`);
-          try {
-            auditOutputCombined += execSync('npm audit --json', { cwd: dir, stdio: ['ignore', 'pipe', 'ignore'] }).toString() + '\n\n';
-          } catch (err: any) {
-            auditOutputCombined += err.stdout ? err.stdout.toString() + '\n\n' : '';
-          }
-        }
+  const npmDirs = findNpmPackageDirs(dirPath);
+  if (npmDirs.length > 0) {
+    let auditOutputCombined = '';
+    for (const dir of npmDirs) {
+      console.log(`📦 Scanning Node.js package dependencies in ${dir} (npm audit)...`);
+      try {
+        auditOutputCombined += `\n\n--- npm audit (${dir}) ---\n\n`;
+        auditOutputCombined += execSync('npm audit --json', { cwd: dir, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      } catch (err: any) {
+        auditOutputCombined += err.stdout ? err.stdout.toString() : '';
       }
     }
-  }
 
-  if (auditOutputCombined.trim()) {
     const { text, issues } = await analyzeDepOutput(auditOutputCombined);
     reportText += `## Node.js Dependencies\n\n${text}\n\n`;
     if (issues) hasIssues = true;
   }
 
-  const requirementsTxtPath = path.join(dirPath, 'requirements.txt');
-  if (fs.existsSync(requirementsTxtPath)) {
-    console.log('📦 Scanning Python dependencies (safety)...');
+  const requirementsFiles = findPythonRequirementFiles(dirPath);
+  for (const requirementsTxtPath of requirementsFiles) {
+    console.log(`📦 Scanning Python dependencies in ${requirementsTxtPath} (safety)...`);
     let auditOutput = '';
     try {
-      auditOutput = execSync('safety check -r requirements.txt --full-report', { cwd: dirPath, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      auditOutput = execSync(`safety check -r "${path.basename(requirementsTxtPath)}" --full-report`, {
+        cwd: path.dirname(requirementsTxtPath),
+        stdio: ['ignore', 'pipe', 'ignore']
+      }).toString();
     } catch (err: any) {
       auditOutput = err.stdout ? err.stdout.toString() : 'Safety tool not installed or failed.';
     }
-    
+
     if (auditOutput && !auditOutput.includes('not installed')) {
         const { text, issues } = await analyzeDepOutput(auditOutput);
-        reportText += `## Python Dependencies\n\n${text}\n\n`;
+        reportText += `## Python Dependencies (${path.relative(dirPath, requirementsTxtPath)})\n\n${text}\n\n`;
         if (issues) hasIssues = true;
     }
   }
 
-  const goModPath = path.join(dirPath, 'go.mod');
-  if (fs.existsSync(goModPath)) {
-    console.log('📦 Scanning Go dependencies (govulncheck)...');
+  const goModuleDirs = findGoModuleDirs(dirPath);
+  for (const goDir of goModuleDirs) {
+    console.log(`📦 Scanning Go dependencies in ${goDir} (govulncheck)...`);
     let auditOutput = '';
     try {
-      auditOutput = execSync('govulncheck ./...', { cwd: dirPath, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      auditOutput = execSync('govulncheck ./...', { cwd: goDir, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
     } catch (err: any) {
       auditOutput = err.stdout ? err.stdout.toString() : 'govulncheck not installed or failed.';
     }
-    
+
     if (auditOutput && !auditOutput.includes('not installed')) {
         const { text, issues } = await analyzeDepOutput(auditOutput);
-        reportText += `## Go Dependencies\n\n${text}\n\n`;
+        reportText += `## Go Dependencies (${path.relative(dirPath, goDir) || '.'})\n\n${text}\n\n`;
         if (issues) hasIssues = true;
     }
   }
@@ -160,51 +234,64 @@ const analyzeDepOutput = async (auditOutput: string): Promise<{ text: string, is
 export const fixDependenciesAndCreatePR = async (dirPath: string, reportText: string): Promise<void> => {
   console.log('🤖 Attempting to auto-fix dependency vulnerabilities...');
   
-  const packageJsonPath = path.join(dirPath, 'package.json');
-  if (fs.existsSync(packageJsonPath)) {
+  const npmDirs = findNpmPackageDirs(dirPath);
+  for (const dir of npmDirs) {
     try {
-      console.log('Running npm audit fix...');
-      execSync('npm audit fix', { cwd: dirPath, stdio: 'ignore' });
+      console.log(`Running npm audit fix in ${dir}...`);
+      execSync('npm audit fix', { cwd: dir, stdio: 'ignore' });
     } catch (e) {
-      console.warn('npm audit fix returned non-zero, continuing to check changes.');
-    }
-  } else {
-    // Monorepo support: Check all package.json files in subdirectories
-    const stack = [dirPath];
-    let visitedDirs = 0;
-    while (stack.length) {
-      const dir = stack.pop();
-      if (!dir) continue;
-      visitedDirs++;
-      if (visitedDirs > 1000) break;
-
-      let entries: fs.Dirent[];
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
-
-      for (const entry of entries) {
-        if (entry.name.startsWith('.') && entry.name !== '.github') continue;
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          if (entry.name === 'node_modules' || entry.name === 'bin' || entry.name === 'obj') continue;
-          stack.push(fullPath);
-        } else if (entry.isFile() && entry.name === 'package.json') {
-          try {
-            console.log(`Running npm audit fix in ${fullPath}...`);
-            execSync('npm audit fix', { cwd: dir, stdio: 'ignore' });
-          } catch (e) {
-            console.warn(`npm audit fix returned non-zero in ${dir}, continuing to check changes.`);
-          }
-        }
-      }
+      console.warn(`npm audit fix returned non-zero in ${dir}, continuing to check changes.`);
     }
   }
 
-  // TODO: Add auto-fix commands for Python, Go, and .NET if viable.
-  // For now, we rely on npm audit fix as the primary automated fixer,
-  // or any other package manager commands that can safely auto-update.
+  const requirementsFiles = findPythonRequirementFiles(dirPath);
+  for (const requirementsPath of requirementsFiles) {
+    try {
+      console.log(`Updating pinned Python requirements in ${requirementsPath}...`);
+      updatePinnedRequirementsFile(requirementsPath);
+    } catch (e) {
+      console.warn(`Python requirements update failed for ${requirementsPath}, continuing.`, e);
+    }
+  }
+
+  const goModuleDirs = findGoModuleDirs(dirPath);
+  for (const goDir of goModuleDirs) {
+    try {
+      console.log(`Running Go dependency updates in ${goDir}...`);
+      execSync('go get -u ./...', { cwd: goDir, stdio: 'ignore' });
+      execSync('go mod tidy', { cwd: goDir, stdio: 'ignore' });
+    } catch (e) {
+      console.warn(`Go dependency update failed in ${goDir}, continuing.`);
+    }
+  }
+
+  const dotnetProjects = findDotnetProjects(dirPath);
+  for (const projectPath of dotnetProjects) {
+    try {
+      const auditOutput = execSync(`dotnet list "${projectPath}" package --vulnerable`, {
+        cwd: path.dirname(projectPath),
+        stdio: ['ignore', 'pipe', 'ignore']
+      }).toString();
+      const vulnerablePackages = extractVulnerableDotnetPackages(auditOutput);
+      for (const pkg of vulnerablePackages) {
+        try {
+          console.log(`Updating .NET package ${pkg} in ${projectPath}...`);
+          execSync(`dotnet add "${projectPath}" package "${pkg}"`, {
+            cwd: path.dirname(projectPath),
+            stdio: 'ignore'
+          });
+        } catch {
+          console.warn(`Failed to update .NET package ${pkg} in ${projectPath}, continuing.`);
+        }
+      }
+    } catch {
+      // No vulnerable packages or command failed; skip project.
+    }
+  }
 
   try {
     setWorkingDirectory(dirPath);
+    await ensureCommitIdentity('orchestra-bot', 'orchestra-bot@users.noreply.github.com');
     const changed = await getChangedFiles();
     if (changed.length === 0) {
       console.log('No files changed after auto-fix attempts.');

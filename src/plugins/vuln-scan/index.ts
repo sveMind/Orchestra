@@ -21,12 +21,10 @@ export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: str
 
   const depResults = await scanDependencies(dirPath);
   reportSections.push(depResults.text);
-  if (depResults.hasIssues) {
-    hasIssues = true;
-    if (mode === 'pr' || mode === 'autofix') {
-      await fixDependenciesAndCreatePR(dirPath, depResults.text);
-    }
+  if (mode === 'pr' || mode === 'autofix') {
+    await fixDependenciesAndCreatePR(dirPath, depResults.text);
   }
+  if (depResults.hasIssues) hasIssues = true;
 
   const codeResults = await scanCodebase(dirPath);
   reportSections.push(codeResults.text);

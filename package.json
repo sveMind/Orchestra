@@ -1,6 +1,6 @@
 {
   "name": "orchestra-ai-devops",
-  "version": "1.1.12", 
+  "version": "1.1.14",
   "description": "Orchestra is an AI-driven DevOps assistant with a modular plugin architecture.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
