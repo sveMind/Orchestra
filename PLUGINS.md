@@ -81,7 +81,7 @@ Orchestra ships with a growing set of ready-to-use plugins:
 
 | Command            | Purpose                                                                    |
 |--------------------|----------------------------------------------------------------------------|
-| `test-gen`         | Generate unit tests (Jest / pytest / plain C) for a source file.           |
+| `test-gen`         | Generate (AI) + run tests across 12 frameworks, write `TEST_REPORT.md`, manage per-test VCS issues with auto-close. |
 | `doc-gen`          | Update repository documentation + inline code comments based on changes.  |
 | `vuln-scan`        | Scan codebase and lock files for vulnerabilities + bad practices.         |
 | `static-analysis`  | SAST via Opengrep/Semgrep rules, fingerprinted issues, auto-close + usage history. |
@@ -115,6 +115,26 @@ orchestra sbom <path> <mode> [options]
   - `issues-per-component` – Opens one VCS issue per deduplicated (ecosystem+name+version) component (title: `[SBOM]🟩[NPM:prod] pkg v1.2.3 (fp1234567890)`) and closes managed issues when a component is upgraded or removed.
   - `comment` – In CI, posts the report as a PR comment (still writes the three files).
 - **Determinism:** Every component issue title embeds a fingerprint of ecosystem+name+version+scope+source-manifest so reruns reconcile without duplicating; stale-managed titles that aren't present in the latest SBOM are closed via the existing IssueProvider.closeIssue pipeline.
+
+### Test Generator Plugin
+```bash
+orchestra test-gen <path> <framework> <mode> [options]
+```
+- **AI test file generation (per source file):** When `<path>` is a single source file, an LLM generates/extends a test file next to it. Framework auto-detects from repo manifests; supported prompt builders: **Jest**, **Vitest**, **Mocha**, **pytest**, **Go testing**, **Cargo/Rust**, **RSpec**, **PHPUnit**, **JUnit 5 (Java/Kotlin)**, **xUnit .NET (C#)**, **plain C assert.h**.
+- **Whole-repo suite runner (best-effort):** When `<path>` is a directory (or omitted), the plugin runs the detected test framework with JSON reporters (`jest --json`, `vitest --reporter=json`, `pytest --json`, `go test -json`, `cargo test --format json -Zunstable-options`, `rspec --format json`, etc.), parses their output into a unified findings list, and writes:
+  - `TEST_REPORT.md` – human summary + per-finding detail (failures first).
+  - `.orchestra/test-results.json` – machine-readable results, safe-read by the other plugins via `readTestArtifact()`.
+  - `.orchestra/test-gen-usage.json` – rolling 200-entry history of all test-gen runs (targets, modes, counts, errors, durations).
+- **Options:** `--dry-run` (build JSON args, skip spawn), `--no-run` (AI-only: no test binary invocation), `--timeout=60` / `--timeout-ms=120000` (per-runner timeout).
+- **Modes:**
+  - `report` – Default. Writes `TEST_REPORT.md` + `.orchestra/test-results.json` + usage history.
+  - `issue` – Opens one umbrella VCS issue: `Orchestra Test Report — <framework> · N/M failing`. Also creates per-test issues for every discovered case, fingerprinted by title so reruns comment instead of duplicating.
+  - `issues-per-test` – Only creates/updates/closes per-test VCS issues; skips the summary issue. Managed titles start with `[TEST]` so they are reconciled on every rerun: tests that no longer fail (or are gone) get closed via the existing IssueProvider.closeIssue pipeline.
+  - `comment` – In CI, posts `TEST_REPORT.md` (clipped to ~6 KB) as a PR comment. Still writes local artifacts + usage history.
+- **Cross-plugin visibility:** Results are surfaced automatically by the other plugins when present:
+  - SBOM.md header bullet + `🧪 Orchestra test-gen results` section with failing-tests table.
+  - vuln-scan `SECURITY_REPORT.md` adds a `## 🧪 Test Results (<framework>)` section with a failing-tests table (so one security report = dep vulns + codebase vulns + SAST + tests).
+  - doc-gen PR comment adds `#### 🧪 Test results (orchestra test-gen)` with the first 15 failing tests so reviewers can see code + docs + security + tests state together.
 
 ## 📦 Publishing Your Plugin
 

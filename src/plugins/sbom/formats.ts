@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { SbomComponent, SbomDocument } from './types';
-import type { OpengrepResultFinding } from '../../utils/pluginArtifacts';
+import type { OpengrepResultFinding, TestArtifact } from '../../utils/pluginArtifacts';
 import { findingsGroupedByModule, severityScore } from '../../utils/pluginArtifacts';
 
 const sha1Hex = (s: string): string => crypto.createHash('sha1').update(s).digest('hex');
@@ -181,7 +181,7 @@ export const toCycloneDx = (doc: SbomDocument, sastFindings?: OpengrepResultFind
   };
 };
 
-export const toMarkdownReport = (doc: SbomDocument, sastFindings?: OpengrepResultFinding[] | null): string => {
+export const toMarkdownReport = (doc: SbomDocument, sastFindings?: OpengrepResultFinding[] | null, testArtifact?: TestArtifact | null): string => {
   const lines: string[] = [];
   lines.push('# Software Bill of Materials (SBOM)');
   lines.push('');
@@ -201,6 +201,9 @@ export const toMarkdownReport = (doc: SbomDocument, sastFindings?: OpengrepResul
       sevC[k] += 1;
     }
     lines.push(`- **SAST (Opengrep) findings available:** ${findings.length} (🔴 HIGH=${sevC.HIGH}, 🟠 MEDIUM=${sevC.MEDIUM}, 🟡 LOW=${sevC.LOW}, ⚪ INFO=${sevC.INFO})`);
+  }
+  if (testArtifact && (testArtifact.testsDiscovered > 0 || testArtifact.findings.length > 0)) {
+    lines.push(`- **Test results:** framework \`${testArtifact.framework}\`, discovered ${testArtifact.testsDiscovered}, passed ${testArtifact.testsPassed}, failed ${testArtifact.testsFailed}, skipped ${testArtifact.testsSkipped}, errored ${testArtifact.testsErrored} (${(testArtifact.totalDurationMs / 1000).toFixed(2)}s).`);
   }
   lines.push('');
 
@@ -268,6 +271,34 @@ export const toMarkdownReport = (doc: SbomDocument, sastFindings?: OpengrepResul
     if (groups.length > 50) lines.push(`\n_Showing top 50 of ${groups.length} modules. See STATIC_ANALYSIS_REPORT.md for the full list._`);
     lines.push('');
     lines.push('> For per-finding detail, open the **Static Analysis Issues** opened by Orchestra in the VCS, or read `STATIC_ANALYSIS_REPORT.md`. Components with correlated findings have `orchestra:sast:hits` + `orchestra:sast:maxSeverity` set in `sbom.cyclonedx.json` for downstream consumers.');
+    lines.push('');
+  }
+
+  if (testArtifact && (testArtifact.testsDiscovered > 0 || testArtifact.findings.length > 0)) {
+    lines.push('## 🧪 Orchestra test-gen results');
+    lines.push('');
+    lines.push(`- Framework: \`${testArtifact.framework}\` (confidence ${Math.round(testArtifact.frameworkConfidence * 100)}%)`);
+    lines.push(`- Generated: **${testArtifact.testsGenerated}** new test cases; Discovered: **${testArtifact.testsDiscovered}**; Passed: ✅ ${testArtifact.testsPassed}; Failed: ❌ ${testArtifact.testsFailed}; Errored/Timeout: 💥 ${testArtifact.testsErrored}; Skipped: ⏭️ ${testArtifact.testsSkipped}; Other: ⚪ ${testArtifact.unknown}.`);
+    lines.push(`- Elapsed: ${(testArtifact.totalDurationMs / 1000).toFixed(2)}s`);
+    if (testArtifact.invocations && testArtifact.invocations.length > 0) {
+      lines.push('- Invocations:');
+      for (const inv of testArtifact.invocations.slice(0, 3)) lines.push(`  - \`${inv.command} ${inv.args.join(' ')}\` exit=${inv.exitCode} ${inv.durationMs}ms`);
+    }
+    if (testArtifact.findings.filter(f => f.outcome === 'failed' || f.outcome === 'error' || f.outcome === 'timeout').length > 0) {
+      lines.push('');
+      lines.push('### Failing test cases (first 20)');
+      lines.push('');
+      lines.push('| # | Framework | Test file | Suite / Test | Outcome | Duration |');
+      lines.push('|---:|---|---|---|---|---:|');
+      const fails = testArtifact.findings.filter(f => f.outcome === 'failed' || f.outcome === 'error' || f.outcome === 'timeout').slice(0, 20);
+      for (let i = 0; i < fails.length; i++) {
+        const f = fails[i];
+        const q = f.suite ? `**${f.suite}** › ${f.testName}` : f.testName;
+        lines.push(`| ${i + 1} | \`${f.framework}\` | \`${escapeMd(f.testFilePath)}\` | ${escapeMd(q)} | ${f.outcome === 'failed' ? '❌' : '💥'} ${f.outcome} | ${f.durationMs ?? '—'} |`);
+      }
+      lines.push('');
+    }
+    lines.push('> See TEST_REPORT.md for the complete output, including per-test VCS issues if you ran `issue` / `issues-per-test` modes.');
     lines.push('');
   }
 

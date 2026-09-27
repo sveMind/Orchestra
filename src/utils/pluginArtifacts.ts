@@ -24,6 +24,42 @@ export type OpengrepArtifact = {
   scanDurationMs?: number;
 };
 
+export type TestResultFinding = {
+  id: string;
+  testFilePath: string;
+  suite: string | null;
+  testName: string;
+  fullyQualifiedName: string;
+  outcome: 'passed' | 'failed' | 'skipped' | 'error' | 'timeout' | 'unknown';
+  durationMs: number | null;
+  failureMessage?: string | null;
+  failureLine?: number | null;
+  failureStack?: string | null;
+  framework: string;
+  language: string;
+  generatedByTestGen: boolean;
+};
+
+export type TestArtifact = {
+  generatedAt: string;
+  repoRoot: string;
+  target: string | null;
+  framework: string;
+  frameworkConfidence: number;
+  evidence: string[];
+  testsGenerated: number;
+  testsDiscovered: number;
+  testsPassed: number;
+  testsFailed: number;
+  testsSkipped: number;
+  testsErrored: number;
+  unknown: number;
+  totalDurationMs: number;
+  findings: TestResultFinding[];
+  errors: string[];
+  invocations?: Array<{ command: string; args: string[]; exitCode: number | null; durationMs: number }>;
+};
+
 export type SbomArtifactPaths = {
   spdx: string | null;
   cdx: string | null;
@@ -86,6 +122,17 @@ export const readSbomArtifacts = (repoRoot: string): SbomArtifactPaths & { compo
 export const readSecurityReportMarkdown = (repoRoot: string): string | null => {
   const p = path.join(repoRoot, 'SECURITY_REPORT.md');
   try { return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null; } catch { return null; }
+};
+
+export const readTestArtifact = (repoRoot: string): TestArtifact | null => {
+  const candidates = [
+    path.join(orchestraDir(repoRoot), 'test-results.json')
+  ];
+  for (const c of candidates) {
+    const d = readJsonSafe<TestArtifact>(c);
+    if (d && Array.isArray(d.findings)) return d;
+  }
+  return null;
 };
 
 export const findingsGroupedByModule = (

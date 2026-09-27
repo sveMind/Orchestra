@@ -7,7 +7,7 @@ import { aggregateSbom } from './aggregator';
 import type { SbomComponent, SbomDocument, SbomMode } from './types';
 import { toCycloneDx, fingerprintComponentsForIssue, toMarkdownReport, toSpdx } from './formats';
 import { DEFAULT_AGGREGATE_OPTS } from './types';
-import { readOpengrepArtifact } from '../../utils/pluginArtifacts';
+import { readOpengrepArtifact, readTestArtifact } from '../../utils/pluginArtifacts';
 
 const ECOSYSTEM_BADGE: Record<string, string> = {
   npm: '🟩', pnpm: '🟩', yarn: '🟩',
@@ -212,9 +212,11 @@ export const action: OrchestraPlugin['action'] = async (rawArgs: string[] = []) 
     includeTestDependencies: includeTest
   });
   const sastArtifact = readOpengrepArtifact(scanDir);
+  const testArtifact = readTestArtifact(scanDir);
   const sastFindings = (sastArtifact && Array.isArray(sastArtifact.results)) ? sastArtifact.results : null;
   if (sastFindings) console.log(`  🔍 Opengrep SAST findings loaded: ${sastFindings.length} (auto-matched into CycloneDX components + SBOM report section).`);
-  const report = toMarkdownReport(doc, sastFindings);
+  if (testArtifact) console.log(`  🧪 Test results loaded: framework ${testArtifact.framework}, discovered ${testArtifact.testsDiscovered}, passed ${testArtifact.testsPassed}, failed ${testArtifact.testsFailed}.`);
+  const report = toMarkdownReport(doc, sastFindings, testArtifact);
   const artifacts = writeSbomArtifacts(scanDir, doc, report, sastFindings);
 
   const prContext = readCiPrContext();

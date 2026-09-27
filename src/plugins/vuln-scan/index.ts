@@ -10,7 +10,7 @@ import { scanDependencies, fixDependenciesAndCreatePR } from './dependencyScan';
 import { scanCodebase } from './codebaseScan';
 import { handleScanOutput } from './reportUtils';
 import { buildSingleFileAnalysisTask, buildFixTask } from './prompts';
-import { readOpengrepArtifact, findingsGroupedByModule, severityScore } from '../../utils/pluginArtifacts';
+import { readOpengrepArtifact, findingsGroupedByModule, severityScore, readTestArtifact } from '../../utils/pluginArtifacts';
 
 const renderSastSection = (dirPath: string): { text: string; hasIssues: boolean } => {
   const artifact = readOpengrepArtifact(dirPath);
@@ -68,6 +68,43 @@ const renderSastSection = (dirPath: string): { text: string; hasIssues: boolean 
   return { text: lines.join('\n'), hasIssues: findings.length > 0 };
 };
 
+const renderTestSection = (dirPath: string): { text: string; hasIssues: boolean } => {
+  const artifact = readTestArtifact(dirPath);
+  if (!artifact || (artifact.testsDiscovered === 0 && artifact.findings.length === 0)) {
+    return {
+      text: `## 🧪 Test Results (test-gen)\n\nNo Orchestra \`test-gen\` artifact was found in \`.orchestra/test-results.json\`. If you have not yet run \`orchestra test-gen <path> report\` against this repository, consider running it first to populate this section with the full test matrix.\n\n`,
+      hasIssues: false
+    };
+  }
+  const lines: string[] = [];
+  lines.push(`## 🧪 Test Results (\`${artifact.framework}\`)`);
+  lines.push('');
+  lines.push(`- **Detected framework:** \`${artifact.framework}\` (confidence ${Math.round(artifact.frameworkConfidence * 100)}%)`);
+  lines.push(`- **Evidence:** ${artifact.evidence.join(' · ') || '—'}`);
+  lines.push(`- **Timing:** ${(artifact.totalDurationMs / 1000).toFixed(2)}s`);
+  lines.push(`- **Tests generated (AI):** ${artifact.testsGenerated}`);
+  lines.push(`- **Tests discovered:** ${artifact.testsDiscovered} (✅ ${artifact.testsPassed} · ❌ ${artifact.testsFailed} · 💥 ${artifact.testsErrored} · ⏭️ ${artifact.testsSkipped} · ⚪ ${artifact.unknown})`);
+  lines.push('');
+  const failing = artifact.findings.filter(f => f.outcome === 'failed' || f.outcome === 'error' || f.outcome === 'timeout');
+  if (failing.length > 0) {
+    lines.push('### Failing test cases (first 20)');
+    lines.push('');
+    lines.push('| # | Outcome | Framework | Test file | Suite / Test | Duration (ms) |');
+    lines.push('|---:|---|---|---|---|---:|');
+    for (let i = 0; i < Math.min(20, failing.length); i++) {
+      const f = failing[i];
+      const q = f.suite ? `**${f.suite}** › ${f.testName}` : f.testName;
+      lines.push(`| ${i + 1} | ${f.outcome === 'failed' ? '❌' : '💥'} ${f.outcome} | \`${f.framework}\` | \`${f.testFilePath.replace(/\|/g, '\\|')}\` | ${q.replace(/\|/g, '\\|')} | ${f.durationMs ?? '—'} |`);
+    }
+    lines.push('');
+    lines.push('> Run `orchestra test-gen <path> issue` to open a VCS issue per failing test with fingerprinted titles that will auto-close once the tests pass.');
+  } else {
+    lines.push(`> All ${artifact.testsPassed} discovered tests passed.`);
+  }
+  lines.push('');
+  return { text: lines.join('\n'), hasIssues: artifact.testsFailed > 0 || artifact.testsErrored > 0 };
+};
+
 export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: string = 'report'): Promise<void> => {
   console.log(`\n🕵️‍♂️ Starting comprehensive security scan on repository: ${dirPath}\n`);
 
@@ -90,6 +127,10 @@ export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: str
   const sastSection = renderSastSection(dirPath);
   reportSections.push(sastSection.text);
   if (sastSection.hasIssues) hasIssues = true;
+
+  const testSection = renderTestSection(dirPath);
+  reportSections.push(testSection.text);
+  if (testSection.hasIssues) hasIssues = true;
 
   const finalReport = reportSections.join('\n');
   await handleScanOutput(dirPath, mode, finalReport, hasIssues);

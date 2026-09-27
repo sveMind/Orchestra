@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import type { OpengrepResultFinding } from '../../utils/pluginArtifacts';
-import { readOpengrepArtifact, findingsGroupedByModule, severityScore } from '../../utils/pluginArtifacts';
+import type { OpengrepResultFinding, TestArtifact } from '../../utils/pluginArtifacts';
+import { readOpengrepArtifact, findingsGroupedByModule, severityScore, readTestArtifact } from '../../utils/pluginArtifacts';
 import { getRepoRelPosix, readTextFile, sha1 } from './docUtils';
 import type { StructurePlanItem } from './types';
 
@@ -1049,6 +1049,26 @@ export const buildDocPrCommentSummary = (params: {
       lines.push('');
       lines.push(`> Run \`orchestra static-analysis ${params.repoRoot}\` to open/manage these findings as VCS issues. Modules appearing here are also highlighted downstream in the SBOM & vulnerability reports.`);
       lines.push('');
+    }
+  } catch {}
+
+  try {
+    const testArt = readTestArtifact(params.repoRoot);
+    if (testArt && (testArt.testsDiscovered > 0 || testArt.findings.length > 0)) {
+      lines.push('#### 🧪 Test results (orchestra test-gen)');
+      lines.push(`Framework: \`${testArt.framework}\`. Generated **${testArt.testsGenerated}** new tests, discovered **${testArt.testsDiscovered}** → ✅ ${testArt.testsPassed} · ❌ ${testArt.testsFailed} · 💥 ${testArt.testsErrored} · ⏭️ ${testArt.testsSkipped} in ${(testArt.totalDurationMs / 1000).toFixed(2)}s.`);
+      lines.push('');
+      const failing = testArt.findings.filter(f => f.outcome === 'failed' || f.outcome === 'error' || f.outcome === 'timeout');
+      if (failing.length > 0) {
+        lines.push('| # | Outcome | Test file | Suite / Test | Duration (ms) |');
+        lines.push('|---:|---|---|---|---:|');
+        for (let i = 0; i < Math.min(15, failing.length); i++) {
+          const f = failing[i];
+          const q = f.suite ? `**${f.suite}** › ${f.testName}` : f.testName;
+          lines.push(`| ${i + 1} | ${f.outcome === 'failed' ? '❌' : '💥'} \`${f.outcome}\` | \`${f.testFilePath.replace(/\|/g, '\\|')}\` | ${q.replace(/\|/g, '\\|')} | ${f.durationMs ?? '—'} |`);
+        }
+        lines.push('');
+      }
     }
   } catch {}
 
