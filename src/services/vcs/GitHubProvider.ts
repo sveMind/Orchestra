@@ -157,6 +157,36 @@ export class GitHubProvider implements VcsProvider {
         }
     }
 
+    async closeIssue(issueNumber: number, closeReason?: string): Promise<boolean> {
+        if (!this.isConfigured()) throw new Error('GitHub not configured.');
+        try {
+            const body = closeReason
+                ? closeReason
+                : 'Closing this issue automatically: finding no longer present in recent static analysis run.';
+            try {
+                await this.octokit.issues.createComment({
+                    owner: this.owner!,
+                    repo: this.repo!,
+                    issue_number: issueNumber,
+                    body,
+                });
+            } catch {
+                // comment best-effort; proceed with close
+            }
+            await this.octokit.issues.update({
+                owner: this.owner!,
+                repo: this.repo!,
+                issue_number: issueNumber,
+                state: 'closed',
+                state_reason: 'completed',
+            });
+            return true;
+        } catch (error) {
+            console.error('Error closing GitHub issue:', error);
+            return false;
+        }
+    }
+
     async getPullRequestDiff(pullNumber: number): Promise<string | null> {
         if (!this.isConfigured()) throw new Error('GitHub not configured.');
         try {

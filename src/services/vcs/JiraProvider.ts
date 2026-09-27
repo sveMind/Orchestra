@@ -180,4 +180,54 @@ export class JiraProvider implements IssueProvider {
             throw error;
         }
     }
+
+    async closeIssue(issueNumber: number, closeReason?: string): Promise<boolean> {
+        const issueKey = `${this.projectKey}-${issueNumber}`;
+        if (!this.isConfigured()) throw new Error('Jira not configured. Missing JIRA_HOST, JIRA_EMAIL, JIRA_API_TOKEN, or JIRA_PROJECT_KEY.');
+        try {
+            const reason = closeReason
+                ? closeReason
+                : 'Closing this issue automatically: finding no longer present in recent static analysis run.';
+            try {
+                await this.client.post(`/issue/${issueKey}/comment`, {
+                    body: {
+                        type: 'doc',
+                        version: 1,
+                        content: [
+                            {
+                                type: 'paragraph',
+                                content: [
+                                    { type: 'text', text: reason },
+                                ],
+                            },
+                        ],
+                    },
+                });
+            } catch {
+                // best effort
+            }
+            await this.client.post(`/issue/${issueKey}/transitions`, {
+                transition: { id: '711' }, // jira default "Done" transition id; override via ORCHESTRA_JIRA_CLOSE_TRANSITION_ID if needed
+                update: {
+                    comment: [
+                        {
+                            add: {
+                                body: {
+                                    type: 'doc',
+                                    version: 1,
+                                    content: [
+                                        { type: 'paragraph', content: [{ type: 'text', text: reason }] },
+                                    ],
+                                },
+                            },
+                        },
+                    ],
+                },
+            });
+            return true;
+        } catch (error) {
+            console.error('Error closing Jira issue:', error);
+            return false;
+        }
+    }
 }

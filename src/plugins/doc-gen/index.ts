@@ -54,7 +54,33 @@ import {
   buildTerraformDoc
 } from './drafts';
 import { proposeStructurePlanWithAi } from './structurePlan';
-import { pickBestDocPathForTopic } from './docSelection';
+import {
+  buildDocPrCommentSummary,
+  buildRelevantDiffSnippet,
+  CodeDocCoverage,
+  computeCodeDocCoverage,
+  computeDownstreamImpact,
+  DEFAULT_TOPIC_HINTS,
+  DiffMentions,
+  DocPrComment,
+  extractDiffMentions,
+  findStaleSections,
+  ManifestChanges,
+  parseManifestChanges,
+  pickBestDocPathForTopic,
+  scoreDocByRelevance,
+  StaleSectionHit,
+  topicRelevantChangedFiles,
+} from './docSelection';
+import {
+  checkDocFreshness,
+  computeChangedFilesHash,
+  computeRepoSignalsFingerprint,
+  readDocGenState,
+  recordDocWritten,
+  setRunSummary,
+  writeDocGenState,
+} from './docState';
 import { buildDocsTitleWithAi, collapseDuplicateDocsToPointer } from './docsPr';
 
 const TOP_LEVEL_DOCS = ['README.md', 'GUIDE.md', 'PLUGINS.md'];
@@ -157,97 +183,78 @@ const isRepoDocumentationFile = (repoRoot: string, filePath: string): boolean =>
   return true;
 };
 
-const pickDocsToUpdate = (repoRoot: string, changedFiles: string[], mode: DocGenMode): string[] => {
+const pickDocsToUpdate = (repoRoot: string, changedFiles: string[], diffsByFile: Map<string, string>, mode: DocGenMode): string[] => {
   const allDocs = listRepoDocumentationFiles(repoRoot);
   if (mode === 'all') return allDocs;
 
-  const picks = new Set<string>();
-  const absChanged = changedFiles
-    .map(f => path.resolve(repoRoot, f))
-    .filter(p => fs.existsSync(p));
-
-  for (const abs of absChanged) {
-    if (isRepoDocumentationFile(repoRoot, abs)) picks.add(abs);
-  }
-
-  const hasNonDocChanges = absChanged.some(f => !isRepoDocumentationFile(repoRoot, f));
-  if (!hasNonDocChanges) return Array.from(picks);
-
   const changedRel = changedFiles.map(f => f.replace(/\\/g, '/'));
+  const mentions = extractDiffMentions(changedRel, diffsByFile);
 
-  const maybeAdd = (rel: string) => {
-    const p = path.join(repoRoot, rel);
-    if (fs.existsSync(p) && fs.statSync(p).isFile()) picks.add(p);
-  };
+  const topLevelHits = new Set<string>();
+  for (const name of TOP_LEVEL_DOCS) topLevelHits.add(name.toLowerCase());
 
-  const addDocsMatching = (regex: RegExp) => {
-    for (const doc of allDocs) {
-      const rel = path.relative(repoRoot, doc).replace(/\\/g, '/');
-      const base = path.basename(doc);
-      if (regex.test(rel) || regex.test(base)) picks.add(doc);
-    }
-  };
-
-  addDocsMatching(/^README\.md$/i);
-  addDocsMatching(/^GUIDE\.md$/i);
-
-  if (changedRel.some(f => f.startsWith('src/plugins/'))) {
-    addDocsMatching(/^PLUGINS\.md$/i);
-  }
-
+  if (changedRel.some(f => f.startsWith('src/plugins/'))) topLevelHits.add('plugins.md'.toLowerCase());
   if (changedRel.some(f => f.startsWith('.github/workflows/') || f === 'action.yml')) {
-    addDocsMatching(/github_actions/i);
-    addDocsMatching(/github.*actions/i);
+    topLevelHits.add('pipelines.md'.toLowerCase());
   }
-
-  if (changedRel.some(f => f.startsWith('templates/') || f.toLowerCase().includes('gitlab'))) {
-    addDocsMatching(/gitlab/i);
-  }
-
-  if (changedRel.some(f => f.startsWith('src/services/vcs/'))) {
-    addDocsMatching(/integrations/i);
-  }
-
-  if (changedRel.some(f => f.startsWith('src/services/') || f.startsWith('src/server') || f.startsWith('src/index'))) {
-    addDocsMatching(/pipelines/i);
-    addDocsMatching(/ci/i);
-  }
-
   if (changedRel.some(f => f === 'Dockerfile' || f.endsWith('/Dockerfile') || f.toLowerCase().includes('docker'))) {
-    addDocsMatching(/docker/i);
-    addDocsMatching(/deploy/i);
+    topLevelHits.add('docker.md'.toLowerCase());
+    topLevelHits.add('deployment.md'.toLowerCase());
+  }
+  if (changedRel.some(f => f.includes('.env') || f.toLowerCase().includes('env'))) {
+    topLevelHits.add('environment.md'.toLowerCase());
   }
 
-  if (changedRel.some(f => f.includes('.env') || f.toLowerCase().includes('env') || f === 'action.yml')) {
-    addDocsMatching(/environment/i);
-    addDocsMatching(/\benv\b/i);
+  const absChanged = changedRel.map(f => path.resolve(repoRoot, f)).filter(p => fs.existsSync(p));
+  const hasNonDocChanges = absChanged.some(f => !isRepoDocumentationFile(repoRoot, f));
+  if (!hasNonDocChanges) {
+    return Array.from(new Set(absChanged.filter(p => allDocs.includes(p))));
   }
 
+  const withScores: Array<{ abs: string; score: number }> = [];
   for (const doc of allDocs) {
-    if (TOP_LEVEL_DOCS.includes(path.basename(doc))) picks.add(doc);
+    const s = scoreDocByRelevance({
+      repoRoot,
+      docAbsPath: doc,
+      mentions,
+      mode: 'changed',
+      topLevelHits,
+    });
+    withScores.push({ abs: doc, score: s });
   }
 
-  return Array.from(picks).filter(p => allDocs.includes(p));
+  const sorted = withScores
+    .filter(x => x.score > 0 || topLevelHits.has(path.basename(x.abs).toLowerCase()))
+    .sort((a, b) => b.score - a.score || a.abs.localeCompare(b.abs))
+    .map(x => x.abs);
+
+  const maxDocs = Math.max(3, Math.min(12, Math.ceil(Math.sqrt(changedRel.length) * 3)));
+  return sorted.slice(0, maxDocs);
 };
 
 const buildDocUpdateTask = (docFileName: string, mode: DocGenMode): string => {
   const modeNote =
     mode === 'all'
-      ? 'Update documentation to reflect the current repository behavior and keep it accurate.'
-      : 'Update documentation ONLY if the recent code changes explicitly require it.';
+      ? 'Update documentation to reflect the current repository behavior. Keep every fact accurate; only rewrite paragraphs that have become stale or need clarifying detail.'
+      : [
+          'Update documentation ONLY to reflect the concrete technical facts that have actually changed in the provided diffs.',
+          'Do not invent or paraphrase unrelated sections. Prefer editing the smallest subset of the document possible.',
+          'The provided "Recent Changes" section is your source of truth. Identify which sentences/sections in the existing doc have become stale, then rewrite or add to only those sections.',
+          'If no sentence in the existing documentation is rendered inaccurate by the provided changes, output exactly: NO_CHANGE'
+        ].join('\n');
 
   return [
-    'You are maintaining repository documentation.',
+    'You are maintaining repository documentation. Your edits must be directly traceable to concrete changes in code or configuration.',
     modeNote,
     '',
     'Rules:',
     '- Output ONLY the FULL, COMPLETE updated markdown file content (no explanations, no surrounding code fences).',
     '- DO NOT output a diff, patch, or partial snippet. You must output the entire file from top to bottom.',
-    '- Do not invent features or behavior that are not evidenced by the provided diffs/context.',
-    '- PRESERVE EXISTING TEXT: Do not rephrase, rewrite, or restructure existing documentation just to change the wording.',
-    '- ONLY update or add text if the technical facts or repository signals have actually changed.',
-    '- Make the absolute minimum necessary updates to reflect the code changes. Do not rewrite the whole document unnecessarily.',
-    '- If the documentation is already technically accurate regarding the codebase, output exactly: NO_CHANGE',
+    '- Do not invent features, APIs, commands, or behavior that is not evidenced by the provided diffs, changed files, or repo signals.',
+    '- PRESERVE EXISTING TEXT: Do not rephrase, rewrite, or restructure existing documentation just to change wording. Leave untouched sections verbatim.',
+    '- Prefer targeted edits: if only a single subsection is stale, update only that subsection; keep the rest as-is.',
+    '- If the documentation is already technically accurate regarding the code changes, output exactly: NO_CHANGE',
+    '- If a change only adds code (e.g., new function) and no existing doc section claims anything contradictory, add a new paragraph / subsection rather than rewriting existing content.',
     '',
     `Target File: ${docFileName}`
   ].join('\n');
@@ -258,19 +265,73 @@ const buildChangeContext = (params: {
   changedFiles: string[];
   diffsByFile: Map<string, string>;
   originalDocContent: string;
+  docAbsPath: string;
+  downstreamImpact?: ReturnType<typeof computeDownstreamImpact>;
+  staleSections?: StaleSectionHit[];
 }): string => {
-  const maxDiffChars = 9000;
-  const maxFilesWithDiffs = 12;
+  const maxDiffChars = 10000;
+  const maxFilesWithDiffs = 16;
 
   const changedList = params.changedFiles.length
     ? params.changedFiles.map(f => `- ${f}`).join('\n')
     : '(none)';
 
+  const mentions = extractDiffMentions(
+    params.changedFiles.map(f => f.replace(/\\/g, '/')),
+    params.diffsByFile
+  );
+  const symbols = Array.from(mentions.symbols).slice(0, 40).join(', ') || '(none)';
+  const keywords = Array.from(mentions.keywords).filter(k => k.length >= 5).slice(0, 40).sort().join(', ') || '(none)';
+
   const parts: string[] = [];
   parts.push('Recent Changes (git status):');
   parts.push(changedList);
   parts.push('');
-  parts.push('Relevant Diffs (truncated):');
+  parts.push('Change footprint (tokenized from added lines in diffs):');
+  parts.push(`- Exported-like symbols (CamelCase / identifiers ≥4 chars): ${symbols}`);
+  parts.push(`- Domain keywords (path segments / basenames / tokens ≥5 chars): ${keywords}`);
+  parts.push('');
+
+  if (params.downstreamImpact && params.downstreamImpact.length > 0) {
+    parts.push('Downstream impact analysis: exports in the changed files that are referenced by other files in the repo.');
+    parts.push('If a doc describes one of these downstream files, update its references to call sites / API contracts too.');
+    for (const imp of params.downstreamImpact.slice(0, 18)) {
+      const hits = Array.from(imp.lineHits.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12)
+        .map(([rel, count]) => `${rel}(${count})`)
+        .join(', ');
+      parts.push(`- ${imp.exported.kind} \`${imp.exported.name}\` in ${imp.exported.fileRel}:${imp.exported.line} → ${imp.downstreamFiles.length} downstream file(s): ${hits}`);
+    }
+    parts.push('');
+  }
+
+  if (params.staleSections && params.staleSections.length > 0) {
+    parts.push('Estimated STALE sections within THIS documentation file (update only these if possible):');
+    for (const hit of params.staleSections) {
+      const sym = hit.matchedSymbols.length ? ` symbols=[${hit.matchedSymbols.slice(0, 4).join(',')}]` : '';
+      const kws = hit.matchedKeywords.length ? ` keywords=[${hit.matchedKeywords.slice(0, 4).join(',')}]` : '';
+      const paths = hit.matchedPaths.length ? ` paths=[${hit.matchedPaths.slice(0, 3).join(',')}]` : '';
+      const prefix = `STALE_SECTION_BOOKMARK score=${hit.score} line=${hit.section.headingLine} level=${hit.section.level}`;
+      parts.push(`- ${prefix} "${hit.section.heading}"${sym}${kws}${paths}`);
+      parts.push('  Body of stale section:');
+      parts.push('  ```md');
+      const body = hit.section.text;
+      if (body.length > 2200) {
+        parts.push('  ' + body.slice(0, 2200).replace(/\n/g, '\n  '));
+        parts.push(`  ...[truncated ${body.length - 2200} chars]`);
+      } else {
+        parts.push('  ' + body.replace(/\n/g, '\n  '));
+      }
+      parts.push('  ```');
+      parts.push('');
+    }
+  } else {
+    parts.push('Estimated STALE sections within THIS documentation file: (none detected — consider returning NO_CHANGE if the prompt asks for minimal edits).');
+    parts.push('');
+  }
+
+  parts.push(`Raw diff snippets (${params.diffsByFile.size} files, truncated):`);
 
   let used = 0;
   let count = 0;
@@ -282,7 +343,7 @@ const buildChangeContext = (params: {
     if (remaining <= 0) break;
     if (count >= maxFilesWithDiffs) break;
 
-    const slice = diff.length > remaining ? diff.slice(0, remaining) : diff;
+    const slice = diff.length > remaining ? diff.slice(0, remaining) + `\n...[truncated ${diff.length - remaining} chars]` : diff;
     used += slice.length;
     count += 1;
     parts.push(`File: ${f}`);
@@ -309,7 +370,7 @@ const plugin: OrchestraPlugin = {
   command: 'doc-gen',
   args: [
     { name: 'path', description: 'File or directory path (use "." for repo root)', required: true },
-    { name: 'mode', description: 'changed | all | structure (optional, default: changed)', required: false }
+    { name: 'mode', description: 'changed | all | structure | comment | pr-comment (optional, default: changed)', required: false }
   ],
   action: async (...args: any[]): Promise<void> => {
     const inputPath = String(args[0] ?? '').trim();
@@ -319,7 +380,9 @@ const plugin: OrchestraPlugin = {
         ? 'all'
         : rawMode === 'structure' || rawMode === 'organize' || rawMode === 'struct'
           ? 'structure'
-          : 'changed';
+          : rawMode === 'comment' || rawMode === 'pr-comment'
+            ? rawMode
+            : 'changed';
 
     if (!inputPath) {
       console.error('Missing path argument.');
@@ -401,7 +464,7 @@ const plugin: OrchestraPlugin = {
     let changedFiles: string[] = [];
     let diffsByFile = new Map<string, string>();
 
-    if (mode === 'changed' || mode === 'structure') {
+    if (mode === 'changed' || mode === 'structure' || mode === 'comment' || mode === 'pr-comment') {
       if (prContext && vcs) {
         const prDiff = await vcs.getPullRequestDiff(prContext.prNumber);
         if (!prDiff && mode === 'changed') {
@@ -498,7 +561,10 @@ const plugin: OrchestraPlugin = {
 
       const dockerText = signals.dockerfilePath ? readTextFile(signals.dockerfilePath) : '';
 
-      const plan = await proposeStructurePlanWithAi(repoRoot, allDocs, signals);
+      const plan = await proposeStructurePlanWithAi(repoRoot, allDocs, signals, {
+        diffsByFile,
+        changedFilesRel: changedFiles
+      });
 
       const structureSignals = [
         `Changed files:\n${(signals.changedFiles || []).map(f => `- ${f}`).join('\n') || '(none)'}`,
@@ -593,9 +659,41 @@ const plugin: OrchestraPlugin = {
         absPath: string;
         draft: string;
         extraContext?: string;
+        topic: StructurePlanItem['topic'];
       }): Promise<void> => {
         const exists = fs.existsSync(params.absPath);
         const existing = exists ? readTextFile(params.absPath) : '';
+
+        const changedRelLocal = changedFiles.map(f => f.replace(/\\/g, '/'));
+        const relevantFiles = topicRelevantChangedFiles(params.topic, changedRelLocal);
+        const diffSnippetBlock = buildRelevantDiffSnippet({
+          topic: params.topic,
+          changedFilesRel: changedRelLocal,
+          diffsByFile,
+          maxChars: 3200
+        });
+
+        const changeAwareHeaderLines: string[] = [];
+        if (changedRelLocal.length > 0) {
+          changeAwareHeaderLines.push(
+            `Relevant changed files for topic "${params.topic}" (${relevantFiles.length}/${changedRelLocal.length} total):`
+          );
+          for (const rel of relevantFiles.slice(0, 12)) {
+            changeAwareHeaderLines.push(`- ${rel}`);
+          }
+          if (relevantFiles.length > 12) {
+            changeAwareHeaderLines.push(`- ... and ${relevantFiles.length - 12} more`);
+          }
+          if (diffSnippetBlock) {
+            changeAwareHeaderLines.push('');
+            changeAwareHeaderLines.push('Relevant code diff snippets from latest changes (use these to update the document):');
+            changeAwareHeaderLines.push(diffSnippetBlock);
+          }
+        } else {
+          changeAwareHeaderLines.push(
+            'No changed files provided — fill in the document from the repo signals but do not invent capabilities.'
+          );
+        }
 
         const task = [
           `Standardize and maintain the "${params.title}" documentation for this repository.`,
@@ -603,17 +701,24 @@ const plugin: OrchestraPlugin = {
           'Rules:',
           '- Output ONLY the FULL, COMPLETE markdown file content (no explanations, no surrounding code fences).',
           '- DO NOT output a diff, patch, or partial snippet. You must output the entire file from top to bottom.',
-          '- Write HIGHLY DESCRIPTIVE and IN-DEPTH documentation based on the provided repository context.',
+          '- Write documentation that is DRIVEN by the concrete code changes in the provided changed files and diff snippets.',
+          '- If a diff snippet shows a NEW API / method / parameter / env var / step / config, ADD it to the documentation in the appropriate section.',
+          '- If a diff snippet REMOVES or RENAMES an API / method / parameter / env var / step / config, REMOVE or UPDATE the corresponding text in the existing documentation.',
           '- Expand upon the provided draft: do not just leave short bullet points. Analyze the signals, app type, and files to write meaningful paragraphs.',
           '- AVOID meta-commentary: Do not use phrases like "heuristic analysis indicates", "is detected as", or "the signals suggest". Write as if you are the human architect explaining how the system works.',
           '- For Install Requirements, explicitly detail how to use language-specific package managers (e.g. pip, npm) vs system tools.',
-          '- Make targeted updates to reflect the current state of the repository. Do not rewrite the entire document unnecessarily.',
+          '- Make targeted updates to reflect the actual code changes. Do not rewrite the entire document unnecessarily.',
+          '- Leave untouched sections verbatim when the diffs don\'t contradict them.',
           '- If no update is needed, output exactly: NO_CHANGE'
         ].join('\n');
 
         const context = [
           'Repository Signals:',
           structureSignals,
+          '',
+          '---',
+          changeAwareHeaderLines.join('\n'),
+          '---',
           '',
           params.extraContext ? `Additional Context:\n${params.extraContext}\n` : '',
           'Existing Content (if any):',
@@ -844,11 +949,34 @@ const plugin: OrchestraPlugin = {
             '- Provide guidelines for submitting pull requests, coding standards, and branch naming conventions.'
           ].join('\n');
         } else if (item.topic === 'changelog') {
+          const changedRelLocal = changedFiles.map(f => f.replace(/\\/g, '/'));
+          const groupByTopic = new Map<string, string[]>();
+          for (const rel of changedRelLocal) {
+            let bucket = 'Other';
+            for (const [t, re] of Object.entries(DEFAULT_TOPIC_HINTS)) {
+              if (!re) continue;
+              if (re.test(rel) || re.test(path.posix.basename(rel))) { bucket = String(t); break; }
+            }
+            const g = groupByTopic.get(bucket) || [];
+            g.push(rel);
+            groupByTopic.set(bucket, g);
+          }
+          const groups: string[] = [];
+          for (const [t, files] of groupByTopic.entries()) {
+            if (!files.length) continue;
+            groups.push(`### ${t}\n` + files.map(f => `- \`${f}\``).join('\n'));
+          }
           draft = [
             '# Changelog',
             '',
-            '## Unreleased',
-            '- Document upcoming features and fixes here.'
+            'The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),',
+            'and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).',
+            '',
+            '## [Unreleased]',
+            '',
+            groups.length
+              ? groups.join('\n\n')
+              : '- _No tracked changes yet. Populated automatically by doc-gen on the next code change._'
           ].join('\n');
         } else if (item.topic === 'deployment') {
           const lines: string[] = ['# Deployment', ''];
@@ -864,7 +992,8 @@ const plugin: OrchestraPlugin = {
           title: item.title,
           absPath,
           draft,
-          extraContext: extraContext || undefined
+          extraContext: extraContext || undefined,
+          topic: item.topic
         });
       }
 
@@ -978,11 +1107,98 @@ const plugin: OrchestraPlugin = {
       }
     }
 
-    const docsToUpdate = pickDocsToUpdate(repoRoot, changedFiles, mode === 'structure' ? 'changed' : mode);
+    const docsToUpdate = pickDocsToUpdate(repoRoot, changedFiles, diffsByFile, mode === 'structure' ? 'changed' : mode);
     if (docsToUpdate.length === 0 && mode !== 'structure') {
       console.log('ℹ️ No documentation files selected for update. Documentation update skipped.');
       return;
     }
+
+    let downstreamForPrompt: ReturnType<typeof computeDownstreamImpact> = [];
+    let mentions: DiffMentions = {
+      pathsRel: new Set(),
+      baseNames: new Set(),
+      symbols: new Set(),
+      keywords: new Set(),
+      totalAddedLines: 0,
+      totalChangedFiles: changedFiles.length
+    };
+    let manifestChanges: ManifestChanges | null = null;
+    try {
+      const changedRel = changedFiles.map(f => f.replace(/\\/g, '/'));
+      mentions = extractDiffMentions(changedRel, diffsByFile);
+      downstreamForPrompt = computeDownstreamImpact({
+        repoRoot,
+        changedFilesRel: changedRel,
+        diffsByFile,
+        maxDepth: 1
+      });
+      manifestChanges = parseManifestChanges({ repoRoot, changedFilesRel: changedRel, diffsByFile });
+      if (manifestChanges && manifestChanges.triggers.forceDocRelPaths.length > 0) {
+        const forcedAbs: string[] = [];
+        const allDocs = listRepoDocumentationFiles(repoRoot);
+        for (const rel of manifestChanges.triggers.forceDocRelPaths) {
+          const abs = path.join(repoRoot, rel);
+          if (fs.existsSync(abs) && allDocs.includes(abs)) forcedAbs.push(abs);
+        }
+        if (forcedAbs.length > 0) {
+          const combined = Array.from(new Set([...docsToUpdate, ...forcedAbs]));
+          docsToUpdate.splice(0, docsToUpdate.length, ...combined);
+          console.log(`🧾 Manifest-triggered forced doc picks: ${manifestChanges.triggers.forceDocRelPaths.join(', ')}`);
+        }
+      }
+    } catch {}
+
+    const signalsForFingerprint: RepoSignals = (() => {
+      try { return scanRepoSignals(repoRoot, changedFiles); } catch {
+        const emptyDetected: any = { detected: false, kinds: [], files: [] };
+        return {
+          appType: 'unknown',
+          languages: [],
+          topLevelDirs: [],
+          topLevelFiles: [],
+          changedFiles: changedFiles.slice(),
+          frontend: { ...emptyDetected },
+          backend: { ...emptyDetected },
+          embedded: { ...emptyDetected },
+          hasPackageJson: false,
+          hasOrchestraLikeLayout: false,
+          dockerfilePath: null,
+          dockerfile: { baseImage: '', packages: [] },
+          dockerComposeFiles: [],
+          nginxFiles: [],
+          pipelineFiles: [],
+          k8sFiles: [],
+          helmFiles: [],
+          terraformFiles: [],
+          openApiSpecFiles: [],
+          apiEndpoints: [],
+          nodeApiHints: null,
+          nativeBuild: { kind: 'none' as const, files: [], hasSources: false }
+        };
+      }
+    })();
+    const repoSignalsFp = computeRepoSignalsFingerprint({
+      appType: signalsForFingerprint.appType,
+      languages: signalsForFingerprint.languages,
+      changedFiles,
+      totalSignalsSnapshot: {
+        k8s: signalsForFingerprint.k8sFiles.length,
+        helm: signalsForFingerprint.helmFiles.length,
+        terraform: signalsForFingerprint.terraformFiles.length,
+        docker: signalsForFingerprint.dockerComposeFiles.length + (signalsForFingerprint.dockerfilePath ? 1 : 0),
+        nginx: signalsForFingerprint.nginxFiles.length,
+        pipelines: signalsForFingerprint.pipelineFiles.length,
+        apiEps: signalsForFingerprint.apiEndpoints.length,
+        openapi: signalsForFingerprint.openApiSpecFiles.length,
+        nativeKind: signalsForFingerprint.nativeBuild.kind
+      }
+    });
+    const changedFilesHash = computeChangedFilesHash(changedFiles.map(f => f.replace(/\\/g, '/')), diffsByFile);
+
+    const touchedDocPaths: string[] = [];
+    const skippedAsFresh: string[] = [];
+    const perDocImpactScores = new Map<string, number>();
+    const staleSectionsByDoc = new Map<string, StaleSectionHit[]>();
 
     const preExistingChanged = await getChangedFiles();
     const preExistingChangedDocs = (preExistingChanged || []).filter(f => {
@@ -992,7 +1208,7 @@ const plugin: OrchestraPlugin = {
 
     let docsBranchName = '';
     let docsBranchExistedRemote = false;
-    if (prContext && docsPrEnabled && vcs) {
+    if (prContext && docsPrEnabled && vcs && mode !== 'comment' && mode !== 'pr-comment') {
       const current = await getCurrentBranch();
       if (!prContext.isFork && !prContext.headRef.startsWith(DOCS_BRANCH_PREFIX) && !current.startsWith(DOCS_BRANCH_PREFIX)) {
         docsBranchName = `${DOCS_BRANCH_PREFIX}/pr-${prContext.prNumber}`;
@@ -1066,6 +1282,48 @@ const plugin: OrchestraPlugin = {
     const docsToUpdateViaAi = uniqueDocsToUpdate;
 
     for (const docPath of docsToUpdateViaAi) {
+      if (!fs.existsSync(docPath)) continue;
+      let docImpactScore = 0;
+      try {
+        const topLevelHits = new Set<string>();
+        docImpactScore = scoreDocByRelevance({
+          repoRoot,
+          docAbsPath: docPath,
+          mentions,
+          mode: 'changed',
+          topLevelHits
+        });
+        const docRel = getRepoRelPosix(repoRoot, docPath);
+        perDocImpactScores.set(docRel, docImpactScore);
+      } catch {}
+      const fresh = checkDocFreshness({
+        repoRoot,
+        docAbsPath: docPath,
+        currentImpactScore: docImpactScore,
+        repoSignalsFingerprint: repoSignalsFp,
+        changedFilesHash: mode === 'all' ? null : changedFilesHash,
+        mode,
+        minImpactScoreDeltaToForce: 1
+      });
+      if (!fresh.stale && mode === 'changed') {
+        skippedCount += 1;
+        skippedAsFresh.push(getRepoRelPosix(repoRoot, docPath));
+        console.log(`⏭️ Fresh (no-delta impact score=${docImpactScore}, reason=${fresh.reason ?? 'unknown'}): ${getRepoRelPosix(repoRoot, docPath)}`);
+        continue;
+      }
+      const staleSections: StaleSectionHit[] = [];
+      if (mode !== 'all') {
+        try {
+          staleSections.push(...findStaleSections({
+            repoRoot,
+            docAbsPath: docPath,
+            mentions,
+            minScore: 4,
+            maxSections: 12
+          }));
+          staleSectionsByDoc.set(getRepoRelPosix(repoRoot, docPath), staleSections.slice());
+        } catch {}
+      }
       const originalDoc = fs.readFileSync(docPath, 'utf-8');
       const task = buildDocUpdateTask(path.basename(docPath), mode);
       const context =
@@ -1075,7 +1333,10 @@ const plugin: OrchestraPlugin = {
               repoRoot,
               changedFiles,
               diffsByFile,
-              originalDocContent: originalDoc
+              originalDocContent: originalDoc,
+              docAbsPath: docPath,
+              downstreamImpact: downstreamForPrompt,
+              staleSections
             });
 
       const aiResponse = await consultAgentRouted(AgentRole.TECHNICAL_WRITER, task, context);
@@ -1098,10 +1359,33 @@ const plugin: OrchestraPlugin = {
       }
 
       fs.writeFileSync(docPath, next);
+      const docRel = getRepoRelPosix(repoRoot, docPath);
+      touchedDocPaths.push(docRel);
+      recordDocWritten({
+        repoRoot,
+        docAbsPath: docPath,
+        docContentAfter: next,
+        repoSignalsFingerprint: repoSignalsFp,
+        changedFilesHash: mode === 'all' ? null : changedFilesHash,
+        impactScore: docImpactScore,
+        mode,
+        rerunReason: fresh.reason
+      });
       updatedCount += 1;
     }
 
     if (updatedCount === 0 && mode !== 'structure') {
+      try {
+        let state = readDocGenState(repoRoot);
+        state = setRunSummary({
+          state,
+          mode,
+          touched: touchedDocPaths,
+          skippedAsFresh,
+          totalChangedFiles: changedFiles.length || null
+        });
+        writeDocGenState(repoRoot, state);
+      } catch {}
       console.log('ℹ️ No documentation updates were necessary.');
       return;
     }
@@ -1109,8 +1393,75 @@ const plugin: OrchestraPlugin = {
     if (mode === 'structure') {
         console.log(`✅ Structure generated. Documentation updated: ${updatedCount} file(s). Skipped: ${skippedCount} file(s).`);
     } else {
-        console.log(`✅ Documentation updated: ${updatedCount} file(s). Skipped: ${skippedCount} file(s).`);
+        console.log(`✅ Documentation updated: ${updatedCount} file(s). Skipped: ${skippedCount} file(s) (of which ${skippedAsFresh.length} fresh via incremental state).`);
     }
+
+    try {
+      let state = readDocGenState(repoRoot);
+      state = setRunSummary({
+        state,
+        mode,
+        touched: touchedDocPaths,
+        skippedAsFresh,
+        totalChangedFiles: changedFiles.length || null
+      });
+      writeDocGenState(repoRoot, state);
+    } catch {}
+
+    const allDocsNow = listRepoDocumentationFiles(repoRoot);
+    let coverage: CodeDocCoverage = {
+      byModule: [],
+      codeToDocTable: [],
+      totalDocs: allDocsNow.length,
+      totalExports: 0,
+      coveredExports: 0,
+      overallPct: 0
+    };
+    let prComment: DocPrComment | null = null;
+
+    try {
+      coverage = computeCodeDocCoverage({
+        repoRoot,
+        changedFilesRel: changedFiles.map(f => f.replace(/\\/g, '/')),
+        allDocsAbs: allDocsNow,
+        downstreamImpact: downstreamForPrompt,
+        mentions
+      });
+    } catch {}
+
+    if (coverage.codeToDocTable.length > 0 || coverage.byModule.length > 0) {
+      console.log(`📊 Doc coverage (exports): ${coverage.coveredExports}/${coverage.totalExports} = ${coverage.overallPct}%`);
+      const rows = coverage.codeToDocTable.slice(0, 10);
+      if (rows.length > 0) {
+        console.log('🗂️  Changed-code → Doc cross-reference (top 10):');
+        for (const r of rows) {
+          console.log(`  - ${r.code}${r.docs.length ? ' → ' + r.docs.join(', ') : ''} (${r.score})`);
+        }
+      }
+      const modLines = coverage.byModule.slice(0, 12);
+      if (modLines.length > 0) {
+        console.log('📦 Export-doc coverage by module (top 12):');
+        for (const m of modLines) {
+          console.log(`  - ${m.module}: ${m.coveredExports}/${m.totalExports} = ${m.pct}%`);
+        }
+      }
+    }
+
+    try {
+      prComment = buildDocPrCommentSummary({
+        repoRoot,
+        mode,
+        changedFilesRel: changedFiles.map(f => f.replace(/\\/g, '/')),
+        touchedDocRels: touchedDocPaths,
+        skippedFreshRels: skippedAsFresh,
+        perDocImpactScores,
+        coverage,
+        manifest: manifestChanges,
+        staleSectionsByDoc,
+        prNumber: prContext?.prNumber ?? null,
+        totalChangedFiles: changedFiles.length
+      });
+    } catch {}
 
     const postUpdateChanged = await getChangedFiles();
     const changedDocs = (postUpdateChanged || []).filter(f => {
@@ -1118,18 +1469,31 @@ const plugin: OrchestraPlugin = {
       return fs.existsSync(abs) && isRepoDocArtifactFile(repoRoot, abs);
     });
 
+    if ((mode === 'comment' || mode === 'pr-comment') && prContext && vcs) {
+      try {
+        if (prComment) await vcs.addComment(prContext.prNumber, prComment.summaryMarkdown);
+        return;
+      } catch (e) {
+        console.error('Failed to post docs-impact PR comment:', e);
+        return;
+      }
+    }
+
     if (!prContext || !vcs) return;
 
-    if (changedDocs.length === 0) return;
+    if (changedDocs.length === 0 && prComment) {
+      try { await vcs.addComment(prContext.prNumber, prComment.summaryMarkdown); } catch {}
+      return;
+    }
 
     if (!docsBranchName) {
       try {
-        await vcs.addComment(
-          prContext.prNumber,
-          `### 📝 Documentation updated by Orchestra\n\nDocumentation changes were generated, but no docs PR branch was created.\n\nChanged files:\n${changedDocs
-            .map(f => `- \`${f}\``)
-            .join('\n')}`
-        );
+        const body: string[] = [];
+        if (prComment) body.push(prComment.summaryMarkdown, '\n---\n');
+        if (changedDocs.length > 0) {
+          body.push(`### 📝 Documentation updated by Orchestra\n\nDocumentation changes were generated, but no docs PR branch was created.\n\nChanged files:\n${changedDocs.map(f => `- \`${f}\``).join('\n')}`);
+        }
+        if (body.length > 0) await vcs.addComment(prContext.prNumber, body.join('\n'));
       } catch {
       }
       return;

@@ -141,6 +141,29 @@ export class GitLabProvider implements VcsProvider {
         }
     }
 
+    async closeIssue(issueNumber: number, closeReason?: string): Promise<boolean> {
+        if (!this.isConfigured()) throw new Error('GitLab not configured.');
+        try {
+            const noteBody = closeReason
+                ? closeReason
+                : 'Closing this issue automatically: finding no longer present in recent static analysis run.';
+            try {
+                await this.client.post(`/projects/${this.projectId}/issues/${issueNumber}/notes`, {
+                    body: noteBody,
+                });
+            } catch {
+                // best effort
+            }
+            await this.client.put(`/projects/${this.projectId}/issues/${issueNumber}`, {
+                state_event: 'close',
+            });
+            return true;
+        } catch (error) {
+            console.error('Error closing GitLab issue:', error);
+            return false;
+        }
+    }
+
     async getPullRequestDiff(pullNumber: number): Promise<string | null> {
         if (!this.isConfigured()) throw new Error('GitLab not configured.');
         try {

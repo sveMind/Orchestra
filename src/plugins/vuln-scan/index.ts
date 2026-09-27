@@ -10,6 +10,63 @@ import { scanDependencies, fixDependenciesAndCreatePR } from './dependencyScan';
 import { scanCodebase } from './codebaseScan';
 import { handleScanOutput } from './reportUtils';
 import { buildSingleFileAnalysisTask, buildFixTask } from './prompts';
+import { readOpengrepArtifact, findingsGroupedByModule, severityScore } from '../../utils/pluginArtifacts';
+
+const renderSastSection = (dirPath: string): { text: string; hasIssues: boolean } => {
+  const artifact = readOpengrepArtifact(dirPath);
+  if (!artifact || !Array.isArray(artifact.results) || artifact.results.length === 0) {
+    return {
+      text: '## 🔍 Static Analysis (Opengrep)\n\nNo opengrep SAST findings were found in `.orchestra/opengrep-findings.json`. If you have not yet run `orchestra static-analysis <repo>` against this repository, consider running it first to populate this section with code-level SAST issues.\n\n',
+      hasIssues: false
+    };
+  }
+  const findings = artifact.results;
+  const sev: Record<string, number> = { HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 };
+  for (const f of findings) {
+    const sc = severityScore(f);
+    const k = sc === 3 ? 'HIGH' : sc === 2 ? 'MEDIUM' : sc === 1 ? 'LOW' : 'INFO';
+    sev[k] += 1;
+  }
+  const lines: string[] = [];
+  lines.push('## 🔍 Static Analysis (Opengrep)');
+  lines.push('');
+  lines.push(`SAST findings produced by \`orchestra static-analysis\` on \`${artifact.generatedAt || new Date().toISOString()}\`.`);
+  lines.push(`  - **Total findings:** ${findings.length}`);
+  lines.push(`  - 🔴 **HIGH / ERROR:** ${sev.HIGH}`);
+  lines.push(`  - 🟠 **MEDIUM / WARNING:** ${sev.MEDIUM}`);
+  lines.push(`  - 🟡 **LOW / INFO:** ${sev.LOW}`);
+  lines.push(`  - ⚪ **Other:** ${sev.INFO}`);
+  if (artifact.errors && artifact.errors.length) lines.push(`  - ⚠️  Parse/scan errors during sast scan: ${artifact.errors.length}`);
+  lines.push('');
+  lines.push('### Findings by module (top 30)');
+  lines.push('');
+  lines.push('| Module | Findings | 🔴 HIGH | 🟠 MEDIUM | 🟡 LOW | ⚪ Other |');
+  lines.push('|---|---:|---:|---:|---:|---:|');
+  const groups = findingsGroupedByModule(findings, { moduleDepth: 3 });
+  for (const g of groups.slice(0, 30)) {
+    lines.push(`| \`${g.module.replace(/\|/g, '\\|')}\` | ${g.findings.length} | ${g.bySeverity['HIGH'] || g.bySeverity['ERROR'] || 0} | ${g.bySeverity['MEDIUM'] || g.bySeverity['WARNING'] || 0} | ${g.bySeverity['LOW'] || g.bySeverity['INFO'] || 0} | ${g.bySeverity['UNKNOWN'] || g.bySeverity['OTHER'] || 0} |`);
+  }
+  if (groups.length > 30) lines.push(`\n_Showing 30 of ${groups.length} modules — see STATIC_ANALYSIS_REPORT.md for full detail._`);
+  lines.push('');
+  lines.push('### Individual findings (first 30, truncated for PR comment size)');
+  lines.push('');
+  lines.push('| # | Severity | Rule | File:Line | Message |');
+  lines.push('|---:|---|---|---|---|');
+  for (let i = 0; i < Math.min(30, findings.length); i++) {
+    const f = findings[i];
+    const sc = severityScore(f);
+    const sevEmoji = sc === 3 ? '🔴' : sc === 2 ? '🟠' : sc === 1 ? '🟡' : '⚪';
+    const rule = (f as any).check_id || (f.extra && (f.extra as any).metadata && (f.extra.metadata as any).id) || '-';
+    const loc = `${f.path}:${f.start?.line ?? 0}`;
+    const msg = (f.extra && (f.extra.message || f.extra.lines)) || '-';
+    const safeMsg = String(msg).replace(/\|/g, '\\|').replace(/\n/g, ' ').slice(0, 220);
+    lines.push(`| ${i + 1} | ${sevEmoji} | \`${String(rule).replace(/\|/g, '\\|')}\` | \`${loc}\` | ${safeMsg} |`);
+  }
+  lines.push('');
+  lines.push(`> 📘 Tip: Run \`orchestra static-analysis ${dirPath} issues-per-finding\` to create per-finding VCS issues with auto-close when they are resolved, or \`orchestra static-analysis ${dirPath} comment\` to append to this PR comment with linkable finding IDs.`);
+  lines.push('');
+  return { text: lines.join('\n'), hasIssues: findings.length > 0 };
+};
 
 export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: string = 'report'): Promise<void> => {
   console.log(`\n🕵️‍♂️ Starting comprehensive security scan on repository: ${dirPath}\n`);
@@ -29,6 +86,10 @@ export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: str
   const codeResults = await scanCodebase(dirPath);
   reportSections.push(codeResults.text);
   if (codeResults.hasIssues) hasIssues = true;
+
+  const sastSection = renderSastSection(dirPath);
+  reportSections.push(sastSection.text);
+  if (sastSection.hasIssues) hasIssues = true;
 
   const finalReport = reportSections.join('\n');
   await handleScanOutput(dirPath, mode, finalReport, hasIssues);

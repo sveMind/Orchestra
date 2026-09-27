@@ -50,29 +50,60 @@ const sanitizeDesiredDocPath = (desired: string): string => {
 export const proposeStructurePlanWithAi = async (
   repoRoot: string,
   allDocs: string[],
-  signals: RepoSignals
+  signals: RepoSignals,
+  options?: { diffsByFile?: Map<string, string>; changedFilesRel?: string[] }
 ): Promise<StructurePlanItem[]> => {
   const allDocsRel = allDocs.map(p => `- ${getRepoRelPosix(repoRoot, p)}`).join('\n') || '(none)';
   const availableTopics = computeAvailableTopics(signals);
+
+  const changedFilesRel = options?.changedFilesRel?.map(f => f.replace(/\\/g, '/')) || signals.changedFiles || [];
+  const diffsByFile = options?.diffsByFile || new Map<string, string>();
+  let relevantChanged = changedFilesRel.slice(0, 60).join('\n') || '(none)';
+  if (changedFilesRel.length > 60) relevantChanged += `\n...(${changedFilesRel.length - 60} more files)`;
+
+  let diffSnippetsSection = '(no diffs available)';
+  if (diffsByFile.size > 0) {
+    const lines: string[] = [];
+    let used = 0;
+    const max = 6000;
+    const budgetPer = 900;
+    let count = 0;
+    for (const f of changedFilesRel) {
+      const d = diffsByFile.get(f);
+      if (!d) continue;
+      if (used >= max || count >= 8) break;
+      const piece = d.length > budgetPer ? d.slice(0, budgetPer) + `\n...[truncated ${d.length - budgetPer} chars]` : d;
+      lines.push(`File: ${f}`);
+      lines.push('```diff');
+      lines.push(piece);
+      lines.push('```');
+      lines.push('');
+      used += piece.length;
+      count += 1;
+    }
+    diffSnippetsSection = lines.length ? lines.join('\n') : '(present but empty)';
+  }
 
   const task = [
     'Create a documentation update plan for this repository.',
     '',
     'Goal:',
-    '- Keep repository documentation alive and accurate as the code changes.',
+    '- Keep repository documentation alive and accurate AS THE CODE CHANGES. Prioritize topics whose supporting code/config has actually changed.',
     '- Focus ONLY on documenting the repository itself (API, build/run/test, pipelines, deployment).',
     '- Do NOT document the documentation tool itself.',
     '',
     'Rules:',
     '- Output strict JSON only: {"docs":[{"topic":"...","title":"...","desiredPath":"docs/NAME.md"}]}',
     `- Choose topics only from: ${availableTopics.join(', ')}`,
-    '- Only include topics that are directly supported by the signals.',
-    '- Prefer reusing existing docs (don’t create new docs if an existing one covers the topic).',
-    '- Keep docs list to 3-8 items.',
+    '- Only include topics that are directly supported by the signals AND/OR the actual changed files/diff snippets provided below.',
+    '- ORDER THE OUTPUT by relevance: topics with concrete changed files or diffs touching that domain go FIRST. Topics not touched by any change go last.',
+    '- Prefer reusing existing docs (don\'t create new docs if an existing one covers the topic).',
+    '- Keep docs list to 3-8 items. If only 1-2 domains changed, pick the 3-6 most impacted topics rather than everything possible.',
     '',
     'Signals:',
     `- available topics: ${availableTopics.join(', ')}`,
-    `- changed files: ${signals.changedFiles.length}`,
+    `- changed files (count): ${signals.changedFiles.length}`,
+    `- changed files list:\n${relevantChanged}`,
     `- app type: ${signals.appType}`,
     `- languages: ${signals.languages.join(', ') || '(unknown)'}`,
     `- frontend: ${signals.frontend.detected ? signals.frontend.kinds.join(', ') : '(none)'}`,
@@ -94,6 +125,9 @@ export const proposeStructurePlanWithAi = async (
     `- terraform files:\n${signals.terraformFiles.map(p => `  - ${getRepoRelPosix(repoRoot, p)}`).join('\n') || '  - (none)'}`,
     `- openapi spec files:\n${signals.openApiSpecFiles.map(p => `  - ${getRepoRelPosix(repoRoot, p)}`).join('\n') || '  - (none)'}`,
     `- native build: ${signals.nativeBuild.kind} (has sources: ${signals.nativeBuild.hasSources ? 'yes' : 'no'})`,
+    '',
+    'Representative diff snippets from the CURRENT code changes (use these to pick priority order):',
+    diffSnippetsSection,
     '',
     'Existing docs:',
     allDocsRel

@@ -1,6 +1,6 @@
 import type { RepoSignals, NativeBuildKind } from '../../services/repoScan';
 
-export type DocGenMode = 'changed' | 'all' | 'structure';
+export type DocGenMode = 'changed' | 'all' | 'structure' | 'comment' | 'pr-comment';
 
 export type StructurePlanItem = {
   topic:

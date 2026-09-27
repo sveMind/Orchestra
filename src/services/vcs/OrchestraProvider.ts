@@ -130,6 +130,29 @@ export class OrchestraProvider implements VcsProvider {
         }
     }
 
+    async closeIssue(issueNumber: number, closeReason?: string): Promise<boolean> {
+        if (!this.isConfigured()) throw new Error('Orchestra not configured. Missing ORCHESTRA_TOKEN.');
+        try {
+            const note = closeReason
+                ? closeReason
+                : 'Closing this issue automatically: finding no longer present in recent static analysis run.';
+            try {
+                await this.client.post(`/projects/${this.projectId}/issues/${issueNumber}/comments`, {
+                    body: note,
+                });
+            } catch {
+                // best effort
+            }
+            await this.client.patch(`/projects/${this.projectId}/issues/${issueNumber}`, {
+                state: 'closed',
+            });
+            return true;
+        } catch (error) {
+            console.error('Error closing Orchestra issue:', error);
+            return false;
+        }
+    }
+
     async getPullRequestDiff(pullNumber: number): Promise<string | null> {
         if (!this.isConfigured()) throw new Error('Orchestra not configured. Missing ORCHESTRA_TOKEN.');
         try {

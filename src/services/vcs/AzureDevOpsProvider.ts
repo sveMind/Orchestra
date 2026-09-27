@@ -221,6 +221,38 @@ export class AzureDevOpsProvider implements VcsProvider {
         }
     }
 
+    async closeIssue(issueNumber: number, closeReason?: string): Promise<boolean> {
+        if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
+        await this.init();
+        try {
+            const reasonText = closeReason
+                ? closeReason
+                : 'Closing this work item automatically: finding no longer present in recent static analysis run.';
+            const patchDocument: JsonPatchDocument = [
+                {
+                    op: 'add',
+                    path: '/fields/System.History',
+                    value: reasonText,
+                },
+                {
+                    op: 'add',
+                    path: '/fields/System.State',
+                    value: 'Closed',
+                },
+                {
+                    op: 'add',
+                    path: '/fields/System.Reason',
+                    value: 'Completed',
+                },
+            ];
+            await this.workItemApi?.updateWorkItem({}, patchDocument, issueNumber, this.project!);
+            return true;
+        } catch (error) {
+            console.error('Error closing Azure Work Item:', error);
+            return false;
+        }
+    }
+
     async getPullRequestDiff(pullNumber: number): Promise<string | null> {
         if (!this.isConfigured()) throw new Error('Azure DevOps not configured.');
         await this.init();

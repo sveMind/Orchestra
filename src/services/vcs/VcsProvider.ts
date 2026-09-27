@@ -5,6 +5,8 @@ export interface IssueProvider {
     findIssueByTitle(title: string): Promise<number | null>;
     addComment(issueNumber: number, body: string): Promise<string | null>;
     addLabels(issueNumber: number, labels: string[]): Promise<void>;
+    /** Close an issue. Returns true if the provider reports the operation as successful. */
+    closeIssue(issueNumber: number, closeReason?: string): Promise<boolean>;
 }
 
 export interface CodeProvider {

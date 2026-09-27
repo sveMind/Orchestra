@@ -27,6 +27,9 @@ class CompositeProvider implements VcsProvider {
     addLabels(issueNumber: number, labels: string[]): Promise<void> {
         return this.issueProvider.addLabels(issueNumber, labels);
     }
+    closeIssue(issueNumber: number, closeReason?: string): Promise<boolean> {
+        return this.issueProvider.closeIssue(issueNumber, closeReason);
+    }
 
     // CodeProvider methods -> Delegate to codeProvider
     getDefaultBranch(): Promise<string> {
