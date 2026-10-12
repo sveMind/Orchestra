@@ -1,3 +1,5 @@
+import type { LicensePolicyReport } from '../../services/licensePolicy';
+
 export type SbomComponentScope = 'runtime' | 'development' | 'optional' | 'unknown';
 
 export type SbomComponent = {
@@ -52,6 +54,7 @@ export type SbomDocument = {
   components: SbomComponent[];
   stats: SbomAggregateStats;
   errors: Array<{ sourceRel: string; message: string }>;
+  licensePolicy?: LicensePolicyReport;
 };
 
 export type SbomAggregateOpts = {

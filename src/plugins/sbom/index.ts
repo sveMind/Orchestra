@@ -8,6 +8,7 @@ import type { SbomComponent, SbomDocument, SbomMode } from './types';
 import { toCycloneDx, fingerprintComponentsForIssue, toMarkdownReport, toSpdx } from './formats';
 import { DEFAULT_AGGREGATE_OPTS } from './types';
 import { readOpengrepArtifact, readTestArtifact } from '../../utils/pluginArtifacts';
+import { loadLicensePolicy, evaluateLicensePolicy, type LicensePolicyReport } from '../../services/licensePolicy';
 
 const ECOSYSTEM_BADGE: Record<string, string> = {
   npm: '🟩', pnpm: '🟩', yarn: '🟩',
@@ -174,7 +175,7 @@ const handleComponentIssues = async (params: {
   };
 };
 
-const writeSbomArtifacts = (dirPath: string, doc: SbomDocument, report: string, sastFindings: any[] | null = null): { spdxPath: string; cdxPath: string; reportPath: string } => {
+const writeSbomArtifacts = (dirPath: string, doc: SbomDocument, report: string, sastFindings: any[] | null = null): { spdxPath: string; cdxPath: string; reportPath: string; licensePolicyPath: string | null } => {
   if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
   const spdx = path.join(dirPath, 'sbom.spdx.json');
   const cdx = path.join(dirPath, 'sbom.cyclonedx.json');
@@ -182,14 +183,21 @@ const writeSbomArtifacts = (dirPath: string, doc: SbomDocument, report: string, 
   fs.writeFileSync(spdx, JSON.stringify(toSpdx(doc), null, 2) + '\n');
   fs.writeFileSync(cdx, JSON.stringify(toCycloneDx(doc, sastFindings), null, 2) + '\n');
   fs.writeFileSync(rp, report + '\n');
-  return { spdxPath: spdx, cdxPath: cdx, reportPath: rp };
+  let licensePolicyPath: string | null = null;
+  if (doc.licensePolicy) {
+    const orchestraDir = path.join(dirPath, '.orchestra');
+    if (!fs.existsSync(orchestraDir)) fs.mkdirSync(orchestraDir, { recursive: true });
+    licensePolicyPath = path.join(orchestraDir, 'sbom-license-policy.json');
+    fs.writeFileSync(licensePolicyPath, JSON.stringify(doc.licensePolicy, null, 2) + '\n');
+  }
+  return { spdxPath: spdx, cdxPath: cdx, reportPath: rp, licensePolicyPath };
 };
 
 export const command: OrchestraPlugin['command'] = 'sbom';
 export const args: OrchestraPlugin['args'] = [
   { name: 'path', description: 'Directory to scan (default: cwd)', required: false },
   { name: 'mode', description: 'report | issue | issues-per-component | comment (default: report)', required: false },
-  { name: 'options', description: '--include-nested-node-modules --include-test=false', required: false }
+  { name: 'options', description: '--include-nested-node-modules --include-test=false --policy-file=<path> --no-policy --copyleft-warn=<on|off> --copyleft-deny', required: false }
 ];
 
 export const action: OrchestraPlugin['action'] = async (rawArgs: string[] = []) => {
@@ -206,16 +214,66 @@ export const action: OrchestraPlugin['action'] = async (rawArgs: string[] = []) 
   const includeNested = rawArgs.some(a => a === '--include-nested-node-modules');
   const includeTest = !rawArgs.some(a => a === '--include-test=false');
 
+  const policyFileFlag = (() => {
+    const a = rawArgs.find(x => x.startsWith('--policy-file='));
+    if (a) return a.slice('--policy-file='.length);
+    return null;
+  })();
+  const noPolicy = rawArgs.some(a => a === '--no-policy');
+  const copyleftWarnOverride = (() => {
+    const a = rawArgs.find(x => x.startsWith('--copyleft-warn='));
+    if (!a) return null;
+    const v = a.slice('--copyleft-warn='.length).toLowerCase();
+    return v === 'on' || v === 'true' || v === '1';
+  })();
+  const copyleftDenyOverride = rawArgs.some(a => a === '--copyleft-deny');
+  const unknownDenyOverride = rawArgs.some(a => a === '--unknown-deny');
+  const requireLicenseAll = rawArgs.some(a => a === '--require-license');
+
   const doc = aggregateSbom(scanDir, {
     ...DEFAULT_AGGREGATE_OPTS,
     includeNestedNodeModules: includeNested,
     includeTestDependencies: includeTest
   });
+
+  let licensePolicy: LicensePolicyReport | undefined;
+  if (!noPolicy) {
+    try {
+      const pol = loadLicensePolicy(scanDir, policyFileFlag);
+      if (copyleftWarnOverride !== null) pol.copyleftWarn = copyleftWarnOverride;
+      if (copyleftDenyOverride) { pol.copyleftWarn = false; pol.copyleftAllow = false; }
+      if (unknownDenyOverride) pol.unknownDeny = true;
+      if (requireLicenseAll) pol.requireLicenseForAll = true;
+      licensePolicy = evaluateLicensePolicy(pol, doc.components);
+      doc.licensePolicy = licensePolicy;
+      // Re-deny strong copyleft components when copyleftDenyOverride is used.
+      if (copyleftDenyOverride) {
+        for (const warn of licensePolicy.warnings.slice()) {
+          if (warn.match?.isCopyleft && !warn.match.isWeakCopyleft) {
+            const idx = licensePolicy.warnings.indexOf(warn);
+            if (idx >= 0) licensePolicy.warnings.splice(idx, 1);
+            warn.verdict = 'DENIED';
+            warn.reason = 'copyleft-deny: strong/network copyleft licenses are denied via CLI flag.';
+            warn.remediation = 'Upgrade the dependency to an alternative with a permissive license, or drop the --copyleft-deny flag.';
+            licensePolicy.denied.push(warn);
+            licensePolicy.summary.denied += 1;
+            licensePolicy.summary.copyleftWarnings = Math.max(0, licensePolicy.summary.copyleftWarnings - 1);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('  ⚠️  License policy evaluation failed:', e instanceof Error ? e.message : String(e));
+    }
+  }
+
   const sastArtifact = readOpengrepArtifact(scanDir);
   const testArtifact = readTestArtifact(scanDir);
   const sastFindings = (sastArtifact && Array.isArray(sastArtifact.results)) ? sastArtifact.results : null;
   if (sastFindings) console.log(`  🔍 Opengrep SAST findings loaded: ${sastFindings.length} (auto-matched into CycloneDX components + SBOM report section).`);
   if (testArtifact) console.log(`  🧪 Test results loaded: framework ${testArtifact.framework}, discovered ${testArtifact.testsDiscovered}, passed ${testArtifact.testsPassed}, failed ${testArtifact.testsFailed}.`);
+  if (licensePolicy) {
+    console.log(`  ⚖️  License policy: allowed=${licensePolicy.summary.allowed}, denied=${licensePolicy.summary.denied}, copyleft=${licensePolicy.summary.copyleftWarnings}, unknown=${licensePolicy.summary.unknownWarnings}, proprietary=${licensePolicy.summary.proprietaryWarnings}. (no license: ${licensePolicy.unlicensedComponents}/${licensePolicy.componentsScanned})`);
+  }
   const report = toMarkdownReport(doc, sastFindings, testArtifact);
   const artifacts = writeSbomArtifacts(scanDir, doc, report, sastFindings);
 
@@ -231,7 +289,11 @@ export const action: OrchestraPlugin['action'] = async (rawArgs: string[] = []) 
     for (const e of doc.errors.slice(0, 5)) console.log(`    - ${e.sourceRel}: ${e.message}`);
   }
 
+  // hasIssues: trigger VCS issue/comment modes when deny exists or warnings exist (warnings are optional escalation path)
+  const hasIssues = !!(licensePolicy && (licensePolicy.summary.denied > 0 || (licensePolicy.policy.requireLicenseForAll && licensePolicy.unlicensedComponents > 0)));
+
   if (mode === 'report') {
+    if (hasIssues) console.log(`  ⚠️  License policy has BLOCKING items (${licensePolicy?.summary.denied} denied). Use --no-policy to skip enforcement, or tune .licenserc.json.`);
     console.log(`✅ Written. Mode "report": no network ops.\n`);
     return;
   }
@@ -249,7 +311,9 @@ export const action: OrchestraPlugin['action'] = async (rawArgs: string[] = []) 
       console.log('ℹ️  No PR context available. Comment not posted; report still written to disk.\n');
       return;
     }
-    const header = `### 📦 Orchestra SBOM Impact Comment\n\n*Generated at ${doc.generatedAt}* · **${doc.stats.totalComponents}** components / **${doc.stats.uniqueComponents}** unique\n\n`;
+    const header = `### 📦 Orchestra SBOM Impact Comment\n\n*Generated at ${doc.generatedAt}* · **${doc.stats.totalComponents}** components / **${doc.stats.uniqueComponents}** unique` +
+      (licensePolicy ? `\n\n⚖️ License Policy: ✅ allowed=${licensePolicy.summary.allowed} · ❌ denied=${licensePolicy.summary.denied} · ⚠️ copyleft=${licensePolicy.summary.copyleftWarnings} · ❓ unknown=${licensePolicy.summary.unknownWarnings} 🏢 proprietary=${licensePolicy.summary.proprietaryWarnings}` : '') +
+      '\n\n';
     const clipped = report.length <= 6000 ? report : report.slice(0, 6000) + `\n\n… (truncated, full report in \`sbom.md\`).`;
     try {
       await vcs.addComment(prContext.prNumber, header + clipped);
@@ -270,6 +334,9 @@ export const action: OrchestraPlugin['action'] = async (rawArgs: string[] = []) 
 
   console.log(`✅ SBOM issue pipeline complete.`);
   console.log(`  Per-component: created=${out.perFinding.created} · updated=${out.perFinding.updated} · closed=${out.perFinding.closed} stale-managed issues.`);
+  if (licensePolicy && licensePolicy.summary.denied > 0) {
+    console.log(`  ⚠️  ${licensePolicy.summary.denied} license-denied components. Remediate by adding allow/overrides in .licenserc.json or replacing dependencies.`);
+  }
   if (createSummary) console.log(`  Summary umbrella: ${out.summary.createdIssue ? 'created new issue' : out.summary.reusedComment ? 'reused existing via addComment' : 'skipped'}.`);
 };
 

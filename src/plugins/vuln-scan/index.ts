@@ -10,7 +10,7 @@ import { scanDependencies, fixDependenciesAndCreatePR } from './dependencyScan';
 import { scanCodebase } from './codebaseScan';
 import { handleScanOutput } from './reportUtils';
 import { buildSingleFileAnalysisTask, buildFixTask } from './prompts';
-import { readOpengrepArtifact, findingsGroupedByModule, severityScore, readTestArtifact } from '../../utils/pluginArtifacts';
+import { readOpengrepArtifact, findingsGroupedByModule, severityScore, readTestArtifact, readSbomLicenseSummary, type SbomLicenseSummary } from '../../utils/pluginArtifacts';
 
 const renderSastSection = (dirPath: string): { text: string; hasIssues: boolean } => {
   const artifact = readOpengrepArtifact(dirPath);
@@ -105,6 +105,49 @@ const renderTestSection = (dirPath: string): { text: string; hasIssues: boolean 
   return { text: lines.join('\n'), hasIssues: artifact.testsFailed > 0 || artifact.testsErrored > 0 };
 };
 
+const renderSbomLicenseSection = (dirPath: string): { text: string; hasIssues: boolean } => {
+  const sum = readSbomLicenseSummary(dirPath);
+  if (!sum) {
+    return {
+      text: `## ⚖️ License Compliance (SBOM)\n\nNo Orchestra \`sbom\` artifact was found. Run \`orchestra sbom ${dirPath} report\` to produce a license policy scan for this section.\n\n`,
+      hasIssues: false
+    };
+  }
+  const lines: string[] = [];
+  lines.push('## ⚖️ License Compliance (SBOM)');
+  lines.push('');
+  lines.push(`Policy loaded from: ${sum.loadedFrom ? `\`${sum.loadedFrom.replace(/\\/g, '/')}\`` : '_(defaults)_'}`);
+  lines.push(`Components scanned: **${sum.componentsScanned}** (licensed: **${sum.licensedComponents}**, no declared license: **${sum.unlicensedComponents}**).`);
+  lines.push(`Summary: ✅ allowed=${sum.allowed} · ❌ denied=${sum.denied} · ⚠️ warnings=${sum.warnings} (copyleft=${sum.copyleftWarnings}, unknown=${sum.unknownWarnings}, proprietary=${sum.proprietaryWarnings}) · ⏭️ skipped=${sum.skipped}`);
+  lines.push('');
+  if (sum.denyListHit.length > 0) {
+    lines.push('### ❌ License-denied components (blocking)');
+    lines.push('');
+    lines.push('| # | Ecosystem | Name | Version | Declared license | Reason | Remediation |');
+    lines.push('|---:|---|---|---|---|---|---|');
+    for (let i = 0; i < Math.min(sum.denyListHit.length, 30); i++) {
+      const h = sum.denyListHit[i];
+      lines.push(`| ${i + 1} | \`${h.ecosystem}\` | \`${h.name.replace(/\|/g, '\\|')}\` | ${h.version ? `\`${h.version}\`` : '—'} | ${h.license ? `\`${String(h.license).replace(/\|/g, '\\|')}\`` : '_(unset)_'} | ${String(h.reason).replace(/\|/g, '\\|').slice(0, 240)} | ${h.remediation ? String(h.remediation).replace(/\|/g, '\\|').slice(0, 240) : '—'} |`);
+    }
+    lines.push('');
+  }
+  if (sum.warnListHit.length > 0) {
+    lines.push('### ⚠️ License warnings');
+    lines.push('');
+    lines.push('| # | Ecosystem | Name | Version | Declared license | Verdict | Reason |');
+    lines.push('|---:|---|---|---|---|---|---|');
+    for (let i = 0; i < Math.min(sum.warnListHit.length, 30); i++) {
+      const h = sum.warnListHit[i];
+      lines.push(`| ${i + 1} | \`${h.ecosystem}\` | \`${h.name.replace(/\|/g, '\\|')}\` | ${h.version ? `\`${h.version}\`` : '—'} | ${h.license ? `\`${String(h.license).replace(/\|/g, '\\|')}\`` : '_(unset)_'} | \`${h.verdict.replace(/\|/g, '\\|')}\` | ${String(h.reason).replace(/\|/g, '\\|').slice(0, 240)} |`);
+    }
+    lines.push('');
+    lines.push(`> Run \`orchestra sbom ${dirPath} report\` to see the full ⚖️ License Policy section in \`sbom.md\` including per-component CycloneDX properties and SPDX attribution refs.`);
+  }
+  lines.push('');
+  const hasIssues = sum.denied > 0;
+  return { text: lines.join('\n'), hasIssues };
+};
+
 export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: string = 'report'): Promise<void> => {
   console.log(`\n🕵️‍♂️ Starting comprehensive security scan on repository: ${dirPath}\n`);
 
@@ -127,6 +170,10 @@ export const scanDirectoryForVulnerabilities = async (dirPath: string, mode: str
   const sastSection = renderSastSection(dirPath);
   reportSections.push(sastSection.text);
   if (sastSection.hasIssues) hasIssues = true;
+
+  const licenseSection = renderSbomLicenseSection(dirPath);
+  reportSections.push(licenseSection.text);
+  if (licenseSection.hasIssues) hasIssues = true;
 
   const testSection = renderTestSection(dirPath);
   reportSections.push(testSection.text);

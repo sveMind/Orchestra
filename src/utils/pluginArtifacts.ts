@@ -66,6 +66,22 @@ export type SbomArtifactPaths = {
   report: string | null;
 };
 
+export type SbomLicenseSummary = {
+  loadedFrom: string | null;
+  componentsScanned: number;
+  licensedComponents: number;
+  unlicensedComponents: number;
+  denied: number;
+  warnings: number;
+  copyleftWarnings: number;
+  unknownWarnings: number;
+  proprietaryWarnings: number;
+  allowed: number;
+  skipped: number;
+  denyListHit: Array<{ ecosystem: string; name: string; version: string | null; license: string | null; reason: string; remediation?: string }>;
+  warnListHit: Array<{ ecosystem: string; name: string; version: string | null; license: string | null; verdict: string; reason: string }>;
+};
+
 const orchestraDir = (repoRoot: string): string => path.join(repoRoot, '.orchestra');
 
 const readJsonSafe = <T>(abs: string): T | null => {
@@ -122,6 +138,82 @@ export const readSbomArtifacts = (repoRoot: string): SbomArtifactPaths & { compo
 export const readSecurityReportMarkdown = (repoRoot: string): string | null => {
   const p = path.join(repoRoot, 'SECURITY_REPORT.md');
   try { return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null; } catch { return null; }
+};
+
+export const readSbomLicenseSummary = (repoRoot: string): SbomLicenseSummary | null => {
+  const cand = [path.join(orchestraDir(repoRoot), 'sbom-license-policy.json'), path.join(repoRoot, 'sbom-license-policy.json')];
+  for (const c of cand) {
+    const d = readJsonSafe<LicensePolicyReportSafe>(c);
+    if (d && typeof d.summary === 'object') return mapLicensePolicyToSummary(d);
+  }
+  const cdxPath = path.join(repoRoot, 'sbom.cyclonedx.json');
+  const cdx = readJsonSafe<any>(cdxPath);
+  if (!cdx || !Array.isArray(cdx.components)) return null;
+  // Extract aggregated license data if present; best-effort (plugin prefers writing machine JSON above, fallback to zero summary with present files)
+  const total = cdx.components.length;
+  let licensed = 0;
+  for (const comp of cdx.components) {
+    if (Array.isArray(comp.licenses) && comp.licenses.length > 0) licensed += 1;
+    if (comp.license) licensed += 1;
+  }
+  return {
+    loadedFrom: null,
+    componentsScanned: total,
+    licensedComponents: licensed,
+    unlicensedComponents: total - licensed,
+    denied: 0,
+    warnings: 0,
+    copyleftWarnings: 0,
+    unknownWarnings: 0,
+    proprietaryWarnings: 0,
+    allowed: total,
+    skipped: 0,
+    denyListHit: [],
+    warnListHit: []
+  };
+};
+type LicensePolicyReportSafe = {
+  policy?: { loadedFrom?: string | null };
+  componentsScanned?: number;
+  licensedComponents?: number;
+  unlicensedComponents?: number;
+  summary?: { allowed?: number; denied?: number; copyleftWarnings?: number; unknownWarnings?: number; proprietaryWarnings?: number; skipped?: number };
+  denied?: Array<{ component?: any; match?: any; verdict: string; reason: string; remediation?: string }>;
+  warnings?: Array<{ component?: any; match?: any; verdict: string; reason: string }>;
+};
+const mapLicensePolicyToSummary = (d: LicensePolicyReportSafe): SbomLicenseSummary => {
+  const summary = d.summary || {};
+  const denyListHit: SbomLicenseSummary['denyListHit'] = (d.denied || []).slice(0, 100).map(v => ({
+    ecosystem: String(v.component?.ecosystem || ''),
+    name: String(v.component?.name || ''),
+    version: v.component?.version || null,
+    license: (v.match?.normalized || v.component?.license || null) as string | null,
+    reason: v.reason || '',
+    remediation: v.remediation
+  }));
+  const warnListHit: SbomLicenseSummary['warnListHit'] = (d.warnings || []).slice(0, 100).map(v => ({
+    ecosystem: String(v.component?.ecosystem || ''),
+    name: String(v.component?.name || ''),
+    version: v.component?.version || null,
+    license: (v.match?.normalized || v.component?.license || null) as string | null,
+    verdict: String(v.verdict || 'WARN_UNKNOWN'),
+    reason: v.reason || ''
+  }));
+  return {
+    loadedFrom: d.policy?.loadedFrom || null,
+    componentsScanned: d.componentsScanned || 0,
+    licensedComponents: d.licensedComponents || 0,
+    unlicensedComponents: d.unlicensedComponents || 0,
+    denied: summary.denied || 0,
+    warnings: (d.warnings || []).length,
+    copyleftWarnings: summary.copyleftWarnings || 0,
+    unknownWarnings: summary.unknownWarnings || 0,
+    proprietaryWarnings: summary.proprietaryWarnings || 0,
+    allowed: summary.allowed || 0,
+    skipped: summary.skipped || 0,
+    denyListHit,
+    warnListHit
+  };
 };
 
 export const readTestArtifact = (repoRoot: string): TestArtifact | null => {

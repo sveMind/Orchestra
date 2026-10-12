@@ -107,13 +107,26 @@ orchestra static-analysis <path> [rules] <mode>
 orchestra sbom <path> <mode> [options]
 ```
 - **Ecosystems parsed:** Node.js (npm / pnpm / yarn lockfiles), Python (requirements.txt, Pipfile, pyproject.toml, poetry.lock), Go (go.mod + go.sum), Rust (Cargo.toml / Cargo.lock), Ruby (Gemfile / Gemfile.lock), PHP (composer.json / composer.lock), Java (pom.xml, build.gradle[.kts]), .NET (.csproj / packages.lock.json).
-- **Artifacts written per run:** `sbom.spdx.json` (SPDX 2.3), `sbom.cyclonedx.json` (CycloneDX 1.5), `sbom.md` (human-readable ecosystem + scope tables, manifest sources, warnings).
+- **Artifacts written per run:** `sbom.spdx.json` (SPDX 2.3), `sbom.cyclonedx.json` (CycloneDX 1.5), `sbom.md` (human-readable ecosystem + scope tables, manifest sources, warnings). When a license policy is applied it also writes `.orchestra/sbom-license-policy.json` so downstream plugins can surface the compact summary.
+- **License policy engine:** A `.licenserc.json` (or `license-policy.json`, `.github/license-policy.json`, or `package.json#licensePolicy`) file drives per-component verdicts, with CLI overrides:
+  - `allow: [...]` → explicit allow-list (SPDX IDs; glob patterns like `*BSD*` accepted). Anything not here is DENIED when the allow-list is non-empty.
+  - `deny: [...]` → explicit deny-list (e.g. `AGPL-3.0-only`, `*GPL-3.0*`). Anything matched is blocked regardless of the allow-list.
+  - `copyleftWarn`, `copyleftAllow` → warn or allow weak/strong/network copyleft.
+  - `unknownWarn`, `unknownDeny` → unknown license expressions (non-SPDX) default to warn.
+  - `proprietaryWarn`, `proprietaryDeny` → proprietary `PROPRIETARY/UNLICENSED/CLOSED-SOURCE` flags.
+  - `requireLicenseForAll` → DENY any component with a missing `license` field.
+  - `overrides` → per-package or per-package+version exceptions: `{ "<ecosystem>:<name>@<ver>": "ALLOWED"|"DENIED"|"WARN_COPYLEFT"|"WARN_UNKNOWN" }`.
+  - **CLI overrides:** `--policy-file=<path>`, `--no-policy` (skip evaluation), `--copyleft-warn=on|off`, `--copyleft-deny` (demote strong/network copyleft warnings to deny), `--unknown-deny`, `--require-license`.
+  - **Verdicts are persisted**: SPDX `licenseConcluded` / `licenseDeclared` + an `OTHER` externalRef with attribution strings; CycloneDX components get `orchestra:license:*` properties (`verdict`, `normalized`, `copyleft`, `proprietary`, `denied`, `warning`, `reason`).
 - **Options:** `--include-nested-node-modules` to walk nested packages, `--include-test=false` to skip dev/test scopes.
 - **Modes:**
-  - `report` – Default. Writes the three artifacts locally + emits a console summary.
-  - `issue` – Opens one umbrella "SBOM Report — …" VCS issue plus closes stale summary issues (fingerprinted by deterministic title + byline).
+  - `report` – Default. Writes artifacts locally, emits console summary, and prints a blocking-item notice when DENIED components exist so CI shell wrappers can grep and fail.
+  - `issue` – Opens one umbrella "SBOM Report — …" VCS issue plus closes stale summary issues (fingerprinted by deterministic title + byline). License-denied components are surfaced inside the issue body as a **⚠️ License Violations** subsection.
   - `issues-per-component` – Opens one VCS issue per deduplicated (ecosystem+name+version) component (title: `[SBOM]🟩[NPM:prod] pkg v1.2.3 (fp1234567890)`) and closes managed issues when a component is upgraded or removed.
-  - `comment` – In CI, posts the report as a PR comment (still writes the three files).
+  - `comment` – In CI, posts the report as a PR comment (still writes the three files). The comment header carries a compact license-policy summary line.
+- **Cross-plugin visibility:** The `.orchestra/sbom-license-policy.json` artifact is consumed automatically:
+  - **vuln-scan** → `SECURITY_REPORT.md` adds `## ⚖️ License Compliance (SBOM)` with denied + warning tables; flips `hasIssues=true` on denies so issue/comment modes post.
+  - **doc-gen** → PR comment carries `#### ⚖️ SBOM License Policy` line + top-15 denied components next to the doc coverage table.
 - **Determinism:** Every component issue title embeds a fingerprint of ecosystem+name+version+scope+source-manifest so reruns reconcile without duplicating; stale-managed titles that aren't present in the latest SBOM are closed via the existing IssueProvider.closeIssue pipeline.
 
 ### Test Generator Plugin

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { OpengrepResultFinding, TestArtifact } from '../../utils/pluginArtifacts';
-import { readOpengrepArtifact, findingsGroupedByModule, severityScore, readTestArtifact } from '../../utils/pluginArtifacts';
+import { readOpengrepArtifact, findingsGroupedByModule, severityScore, readTestArtifact, readSbomLicenseSummary } from '../../utils/pluginArtifacts';
 import { getRepoRelPosix, readTextFile, sha1 } from './docUtils';
 import type { StructurePlanItem } from './types';
 
@@ -1066,6 +1066,24 @@ export const buildDocPrCommentSummary = (params: {
           const f = failing[i];
           const q = f.suite ? `**${f.suite}** › ${f.testName}` : f.testName;
           lines.push(`| ${i + 1} | ${f.outcome === 'failed' ? '❌' : '💥'} \`${f.outcome}\` | \`${f.testFilePath.replace(/\|/g, '\\|')}\` | ${q.replace(/\|/g, '\\|')} | ${f.durationMs ?? '—'} |`);
+        }
+        lines.push('');
+      }
+    }
+  } catch {}
+
+  try {
+    const lic = readSbomLicenseSummary(params.repoRoot);
+    if (lic && lic.componentsScanned > 0) {
+      lines.push('#### ⚖️ SBOM License Policy');
+      lines.push(`Components: **${lic.componentsScanned}** (licensed **${lic.licensedComponents}**, no-declared-license **${lic.unlicensedComponents}**). ✅ allowed=**${lic.allowed}** · ❌ denied=**${lic.denied}** · ⚠️ warnings=**${lic.warnings}** (copyleft=${lic.copyleftWarnings}, unknown=${lic.unknownWarnings}, proprietary=${lic.proprietaryWarnings}).`);
+      lines.push('');
+      if (lic.denyListHit.length > 0) {
+        lines.push('| # | Ecosystem | Name | Version | License | Reason |');
+        lines.push('|---:|---|---|---|---|---|');
+        for (let i = 0; i < Math.min(15, lic.denyListHit.length); i++) {
+          const h = lic.denyListHit[i];
+          lines.push(`| ${i + 1} | \`${h.ecosystem}\` | \`${h.name.replace(/\|/g, '\\|')}\` | ${h.version ? `\`${h.version}\`` : '—'} | ${h.license ? `\`${String(h.license).replace(/\|/g, '\\|')}\`` : '_(unset)_'} | ${String(h.reason).replace(/\|/g, '\\|').slice(0, 240)} |`);
         }
         lines.push('');
       }
